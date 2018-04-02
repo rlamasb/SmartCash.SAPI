@@ -1,0 +1,714 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Data.SqlClient;
+using System.Diagnostics;
+using System.IO;
+using System.Net;
+using System.Text;
+using Microsoft.Extensions.Configuration;
+using Newtonsoft.Json;
+
+namespace SAPI.Sync
+{
+    class Program
+    {
+
+        // Wallet
+        static string serverURL = "http://127.0.0.1:9679";
+        static string serverUser = string.Empty;
+        static string serverPass = string.Empty;
+        //dotnet ef dbcontext scaffold "Data Source=(local);Initial Catalog=SmartExplorer;Integrated Security=True;" Microsoft.EntityFrameworkCore.SqlServer -o Model
+        //> dotnet ef dbcontext scaffold "Data Source=(local);Initial Catalog=SmartExplorer;Integrated Security=True;" Microsoft.EntityFrameworkCore.SqlServer -o Model -context "SmartExplorerContext"
+        // SQL Scaffold-DbContext "Data Source=(local);Initial Catalog=SmartExplorer;Integrated Security=True;" Microsoft.EntityFrameworkCore.SqlServer -OutputDir Models
+        //static string connString = @"Data Source=(local);Initial Catalog=SmartExplorer;Integrated Security=True;";
+
+        //static string connString = @"Server=tcp:smartexplorer.database.windows.net,1433;Initial Catalog=SmartExplorer;Persist Security Info=False;User ID=explorer;Password=3n710u3S0uz@;MultipleActiveResultSets=False;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;";
+
+        static string connString = string.Empty;
+        public static IConfiguration Configuration { get; set; }
+
+
+        static void Main(string[] args)
+        {
+            var builder = new ConfigurationBuilder()
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json");
+            Configuration = builder.Build();
+
+
+            connString = $"Server=tcp:localhost,1433;Initial Catalog=SAPI;User ID=sa;Password={Configuration["SyncDb"]};Connection Timeout=30;";
+            serverUser = Configuration["rpcuser"];
+            serverPass = Configuration["rpcpass"];
+
+            //Body
+            HashSet<string> tx = GetAllTransactions(); // All transactions, needed for ZeroCoin Mint (SmartCash Renew) transaction fix
+
+            string startBlockHash = GetStartBlockHash();
+            Block curBlock = new Block();
+            if (startBlockHash == null || startBlockHash == "") // Start from scratch
+            {
+                startBlockHash = "00000009c4e61bee0e8d6236f847bb1dd23f4c61ca5240b74852184c9bf98c30"; // Block 1
+                curBlock = GetBlock(startBlockHash);
+                InsertBlock(curBlock);
+                foreach (string txid in curBlock.tx)
+                {
+                    Transaction nextTransaction = GetTransaction(txid);
+                    InsertTransaction(nextTransaction);
+
+                    var countInput = 0;
+                    // Input
+                    foreach (TransactionInput transactionInput in nextTransaction.vin)
+                    {
+                        InsertTransactionInput(transactionInput, txid, countInput);
+                        countInput++;
+                    }
+
+                    // Output
+                    foreach (TransactionOutput transactionOutput in nextTransaction.vout)
+                    {
+                        if (transactionOutput.scriptPubKey.addresses != null)
+                        {
+                            if (transactionOutput.scriptPubKey.addresses.Length > 1)
+                            {
+                                Debug.WriteLine("2> Address: " + txid);
+                            }
+                            InsertTransactionOutput(transactionOutput, txid);
+                        }
+                        else
+                        {
+                            Debug.WriteLine("No Address: " + txid);
+                        }
+                    }
+
+                    tx.Add(txid);
+
+                }
+            }
+            else
+            {
+                curBlock = GetBlock(startBlockHash);
+            }
+
+            //Fix Orphan Blocks
+            if (curBlock.confirmations == -1)
+            {
+                DeleteOrphanBlock(curBlock.hash);
+                startBlockHash = GetStartBlockHash();
+                curBlock = GetBlock(startBlockHash);
+            }
+
+            while (curBlock.nextblockhash != null)
+            {
+                // Block
+                curBlock = GetBlock(curBlock.nextblockhash);
+                InsertBlock(curBlock);
+
+                // Transaction
+                foreach (string txid in curBlock.tx)
+                {
+
+                    Transaction nextTransaction = GetTransaction(txid);
+
+                    if (!tx.Contains(txid)) //Exclude transactions linked to multiple blocks (Zerocoin Mint/Smartcash Renew)
+                    {
+                        InsertTransaction(nextTransaction);
+
+                        var countInput = 0;
+                        // Input
+                        foreach (TransactionInput transactionInput in nextTransaction.vin)
+                        {
+                            InsertTransactionInput(transactionInput, txid, countInput);
+                            countInput++;
+                        }
+
+                        // Output
+                        foreach (TransactionOutput transactionOutput in nextTransaction.vout)
+                        {
+                            if (transactionOutput.scriptPubKey.addresses != null)
+                            {
+                                if (transactionOutput.scriptPubKey.addresses.Length > 1)
+                                {
+                                    Debug.WriteLine("2> Address: " + txid);
+                                }
+                                InsertTransactionOutput(transactionOutput, txid);
+                            }
+                            else
+                            {
+                                Debug.WriteLine("No Address: " + txid);
+                            }
+                        }
+
+                        tx.Add(txid);
+                    }
+                }
+
+                //Console.WriteLine(curBlock.height);
+            }
+
+            // Transaction
+            foreach (string txid in curBlock.tx)
+            {
+
+                Transaction nextTransaction = GetTransaction(txid);
+
+                if (!tx.Contains(txid)) //Exclude transactions linked to multiple blocks (Zerocoin Mint/Smartcash Renew)
+                {
+                    InsertTransaction(nextTransaction);
+
+                    var countInput = 0;
+                    // Input
+                    foreach (TransactionInput transactionInput in nextTransaction.vin)
+                    {
+                        InsertTransactionInput(transactionInput, txid, countInput);
+                        countInput++;
+                    }
+
+                    // Output
+                    foreach (TransactionOutput transactionOutput in nextTransaction.vout)
+                    {
+                        if (transactionOutput.scriptPubKey.addresses != null)
+                        {
+                            if (transactionOutput.scriptPubKey.addresses.Length > 1)
+                            {
+                                Debug.WriteLine("2> Address: " + txid);
+                            }
+                            InsertTransactionOutput(transactionOutput, txid);
+                        }
+                        else
+                        {
+                            Debug.WriteLine("No Address: " + txid);
+                        }
+                    }
+
+                    tx.Add(txid);
+                }
+            }
+
+            Console.WriteLine(curBlock.height);
+
+            Console.WriteLine("Done");
+            System.Threading.Thread.Sleep(5000);
+        }
+
+        static string GetStartBlockHash()
+        {
+            string startBlockHash = "";
+
+
+            string selectString = "SELECT TOP 1 [Hash] FROM [Block] ORDER BY [Height] DESC";
+            using (SqlConnection conn = new SqlConnection(connString))
+            {
+
+                using (SqlCommand comm = new SqlCommand(selectString, conn))
+                {
+                    try
+                    {
+                        conn.Open();
+                        startBlockHash = (string)comm.ExecuteScalar();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("SQL Error" + ex.Message + " : " + "GetStartBlockHash");
+                        throw;
+                    }
+                }
+            }
+
+            return startBlockHash;
+        }
+
+        static HashSet<string> GetAllTransactions()
+        {
+            HashSet<string> tx = new HashSet<string>();
+
+            string selectString = "SELECT [Txid] FROM [Transaction]";
+            using (SqlConnection conn = new SqlConnection(connString))
+            {
+
+                using (SqlCommand comm = new SqlCommand(selectString, conn))
+                {
+                    try
+                    {
+                        conn.Open();
+                        using (SqlDataReader dr = comm.ExecuteReader())
+                        {
+                            while (dr.Read())
+                            {
+                                tx.Add(dr["Txid"].ToString());
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("SQL Error" + ex.Message + " : " + "GetAllTransactions");
+                        throw;
+                    }
+                }
+            }
+
+            return tx;
+        }
+
+        static Block GetBlock(string blockHash)
+        {
+
+            //Authorization Header
+            ASCIIEncoding encoding = new ASCIIEncoding();
+            byte[] bytesAuthValue = encoding.GetBytes(serverUser + ":" + serverPass);
+            string base64AuthValue = Convert.ToBase64String(bytesAuthValue);
+            string basicAuthValue = "Basic " + base64AuthValue;
+
+            //Body
+            RequestBody requestBody = new RequestBody()
+            {
+                method = "getblock",
+                @params = new object[] { blockHash }
+            };
+
+
+            var jsonRequestBody = JsonConvert.SerializeObject(requestBody);
+            byte[] bytesRequestBody = encoding.GetBytes(jsonRequestBody);
+
+            //Post
+            HttpWebRequest req = (HttpWebRequest)WebRequest.Create(serverURL);
+            req.Method = "POST";
+            req.ContentType = "application/json";
+            req.Headers.Add("Authorization", basicAuthValue);
+
+            Stream newStream = req.GetRequestStream();
+            newStream.Write(bytesRequestBody, 0, bytesRequestBody.Length);
+            newStream.Close();
+
+            //Response
+            HttpWebResponse response = (HttpWebResponse)req.GetResponse();
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                using (Stream stream = response.GetResponseStream())
+                {
+                    StreamReader reader = new StreamReader(stream, Encoding.UTF8);
+                    string responseString = reader.ReadToEnd();
+                    var responseBlock = JsonConvert.DeserializeObject<ResponseBlock>(responseString);
+                    if (responseBlock.error == null || responseBlock.error == "")
+                    {
+                        return responseBlock.result;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Response Error" + responseBlock.error + " : " + jsonRequestBody);
+                        throw new Exception();
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine("HTTP Error" + response.StatusCode.ToString() + " : " + jsonRequestBody);
+                throw new Exception();
+            }
+
+
+        }
+
+        static bool InsertBlock(Block block)
+        {
+            string cmdString = "INSERT INTO [Block] ([Hash],[Height],[Confirmation],[Size],[Difficulty],[Version],[Time]) VALUES (@Hash, @Height, @Confirmation, @Size, @Difficulty, @Version, @Time)";
+            using (SqlConnection conn = new SqlConnection(connString))
+            {
+
+                using (SqlCommand comm = new SqlCommand())
+                {
+                    comm.Connection = conn;
+                    comm.CommandText = cmdString;
+                    comm.Parameters.AddWithValue("@Hash", block.hash);
+                    comm.Parameters.AddWithValue("@Height", block.height);
+                    comm.Parameters.AddWithValue("@Confirmation", block.confirmations);
+                    comm.Parameters.AddWithValue("@Size", block.size);
+                    comm.Parameters.AddWithValue("@Difficulty", block.difficulty);
+                    comm.Parameters.AddWithValue("@Version", block.version);
+                    comm.Parameters.AddWithValue("@Time", UnixTimeStampToDateTime(block.time));
+                    try
+                    {
+                        conn.Open();
+                        comm.ExecuteNonQuery();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("SQL Error" + ex.Message + " : " + JsonConvert.SerializeObject(block));
+
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        static Transaction GetTransaction(string txid)
+        {
+
+            //Authorization Header
+            ASCIIEncoding encoding = new ASCIIEncoding();
+            byte[] bytesAuthValue = encoding.GetBytes(serverUser + ":" + serverPass);
+            string base64AuthValue = Convert.ToBase64String(bytesAuthValue);
+            string basicAuthValue = "Basic " + base64AuthValue;
+
+            //Body
+            RequestBody requestBody = new RequestBody()
+            {
+                method = "getrawtransaction",
+                @params = new object[] { txid, 1 }
+            };
+            var jsonRequestBody = JsonConvert.SerializeObject(requestBody);
+            byte[] bytesRequestBody = encoding.GetBytes(jsonRequestBody);
+
+            //Post
+            HttpWebRequest req = (HttpWebRequest)WebRequest.Create(serverURL);
+            req.Method = "POST";
+            req.ContentType = "application/json";
+            req.Headers.Add("Authorization", basicAuthValue);
+
+            Stream newStream = req.GetRequestStream();
+            newStream.Write(bytesRequestBody, 0, bytesRequestBody.Length);
+            newStream.Close();
+
+            //Response
+            HttpWebResponse response = (HttpWebResponse)req.GetResponse();
+            if (response.StatusCode == HttpStatusCode.OK)
+            {
+                using (Stream stream = response.GetResponseStream())
+                {
+                    StreamReader reader = new StreamReader(stream, Encoding.UTF8);
+                    string responseString = reader.ReadToEnd();
+
+                    var responseTransaction = JsonConvert.DeserializeObject<ResponseTransaction>(responseString);
+                    if (responseTransaction.error == null || responseTransaction.error == "")
+                    {
+                        return responseTransaction.result;
+                    }
+                    else
+                    {
+                        Console.WriteLine("Response Error" + responseTransaction.error + " : " + jsonRequestBody);
+                        throw new Exception();
+                    }
+                }
+            }
+            else
+            {
+                Console.WriteLine("HTTP Error" + response.StatusCode.ToString() + " : " + jsonRequestBody);
+                throw new Exception();
+            }
+
+        }
+
+        static bool InsertTransaction(Transaction transaction)
+        {
+
+            string cmdString = "EXEC Transaction_Create @Txid, @BlockHash, @Version, @Time";
+            using (SqlConnection conn = new SqlConnection(connString))
+            {
+
+                using (SqlCommand comm = new SqlCommand())
+                {
+                    comm.Connection = conn;
+                    comm.CommandText = cmdString;
+                    comm.Parameters.AddWithValue("@Txid", transaction.txid);
+                    comm.Parameters.AddWithValue("@BlockHash", transaction.blockhash);
+                    comm.Parameters.AddWithValue("@Version", transaction.version);
+                    comm.Parameters.AddWithValue("@Time", UnixTimeStampToDateTime(transaction.time));
+                    try
+                    {
+                        conn.Open();
+                        comm.ExecuteNonQuery();
+
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("SQL Error" + ex.Message + " : " + JsonConvert.SerializeObject(transaction));
+
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        static bool InsertTransactionInput(TransactionInput transactionInput, string txid, int index)
+        {
+            string coinbase = transactionInput.coinbase;
+            string txidOut = transactionInput.txid;
+            long indexOut = transactionInput.vout;
+            string sAddress = "";
+            decimal sValue = 0;
+
+            if (coinbase != null)
+            {
+                txidOut = "0000000000000000000000000000000000000000000000000000000000000000";
+                sAddress = "0000000000000000000000000000000000";
+            }
+            else if (txidOut == "0000000000000000000000000000000000000000000000000000000000000000")
+            {
+                indexOut = 0;
+                sAddress = "0000000000000000000000000000000001";
+            }
+            else
+            {
+                string selectString = "SELECT [Address], [Value] FROM [TransactionOutput] WHERE [Txid] = '" + txidOut + "' AND [Index] = " + indexOut;
+                using (SqlConnection conn = new SqlConnection(connString))
+                {
+
+                    using (SqlCommand comm = new SqlCommand(selectString, conn))
+                    {
+                        try
+                        {
+                            conn.Open();
+                            using (SqlDataReader dr = comm.ExecuteReader())
+                            {
+                                while (dr.Read())
+                                {
+                                    sAddress = dr["Address"].ToString();
+                                    sValue = decimal.Parse(dr["Value"].ToString());
+                                }
+                            }
+
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("SQL Error" + ex.Message + " : " + JsonConvert.SerializeObject(transactionInput) + " ; " + txid + " ; " + index.ToString());
+                            throw;
+                        }
+                    }
+                }
+            }
+
+            string cmdString = "INSERT INTO [TransactionInput] ([TxidIn],[IndexIn],[TxidOut],[IndexOut],[Address],[Value]) VALUES (@TxidIn, @IndexIn, @TxidOut, @IndexOut, @Address, @Value)";
+            using (SqlConnection conn = new SqlConnection(connString))
+            {
+
+                using (SqlCommand comm = new SqlCommand())
+                {
+                    comm.Connection = conn;
+                    comm.CommandText = cmdString;
+                    comm.Parameters.AddWithValue("@TxidIn", txid);
+                    comm.Parameters.AddWithValue("@IndexIn", index);
+                    comm.Parameters.AddWithValue("@TxidOut", txidOut);
+                    comm.Parameters.AddWithValue("@IndexOut", indexOut);
+                    comm.Parameters.AddWithValue("@Address", sAddress);
+                    comm.Parameters.AddWithValue("@Value", sValue);
+                    try
+                    {
+                        conn.Open();
+                        comm.ExecuteNonQuery();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("SQL Error" + ex.Message + " : " + JsonConvert.SerializeObject(transactionInput) + " ; " + txid + " ; " + index.ToString());
+                        throw;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        static bool InsertTransactionOutput(TransactionOutput transactionOutput, string txid)
+        {
+
+            string cmdString = "INSERT INTO [TransactionOutput] ([Txid],[Index],[Address],[Value]) VALUES (@Txid, @Index, @Address, @Value)";
+            using (SqlConnection conn = new SqlConnection(connString))
+            {
+
+                using (SqlCommand comm = new SqlCommand())
+                {
+                    comm.Connection = conn;
+                    comm.CommandText = cmdString;
+                    comm.Parameters.AddWithValue("@Txid", txid);
+                    comm.Parameters.AddWithValue("@Index", transactionOutput.n);
+                    comm.Parameters.AddWithValue("@Address", transactionOutput.scriptPubKey.addresses[0]);
+                    comm.Parameters.AddWithValue("@Value", transactionOutput.value);
+                    try
+                    {
+                        conn.Open();
+                        comm.ExecuteNonQuery();
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine("SQL Error" + ex.Message + " : " + JsonConvert.SerializeObject(transactionOutput) + " ; " + txid);
+                        throw;
+                    }
+                }
+            }
+
+            return true;
+        }
+
+        static bool DeleteOrphanBlock(string blockHash)
+        {
+
+            using (SqlConnection conn = new SqlConnection(connString))
+            {
+                try
+                {
+                    conn.Open();
+
+                    using (SqlCommand comm = new SqlCommand("SELECT [Txid] FROM [Transaction] WHERE [BlockHash] = '" + blockHash + "'", conn))
+                    {
+                        HashSet<string> hTxid = new HashSet<string>();
+
+                        using (SqlDataReader dr = comm.ExecuteReader())
+                        {
+                            while (dr.Read())
+                            {
+                                hTxid.Add(dr["Txid"].ToString());
+                            }
+                        }
+
+                        foreach (string txid in hTxid)
+                        {
+                            using (SqlCommand commI = new SqlCommand())
+                            {
+                                commI.Connection = conn;
+                                commI.CommandText = "DELETE FROM [TransactionInput] WHERE [TxidIn] = '" + txid + "'";
+                                commI.ExecuteNonQuery();
+                            }
+
+                            using (SqlCommand commO = new SqlCommand())
+                            {
+                                commO.Connection = conn;
+                                commO.CommandText = "DELETE FROM [TransactionOutput] WHERE [Txid] = '" + txid + "'";
+                                commO.ExecuteNonQuery();
+                            }
+                        }
+                    }
+
+                    using (SqlCommand commT = new SqlCommand())
+                    {
+                        commT.Connection = conn;
+                        commT.CommandText = "DELETE FROM [Transaction] WHERE [BlockHash] = '" + blockHash + "'";
+                        commT.ExecuteNonQuery();
+                    }
+
+                    using (SqlCommand commB = new SqlCommand())
+                    {
+                        commB.Connection = conn;
+                        commB.CommandText = "DELETE FROM [Block] WHERE [Hash] = '" + blockHash + "'";
+                        commB.ExecuteNonQuery();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("SQL Error" + ex.Message + " : " + "DeleteOrphanBlock" + " : " + blockHash);
+                    throw;
+                }
+
+            }
+
+            return true;
+        }
+
+
+        //
+        // Helper Functions
+        //
+        public static DateTime UnixTimeStampToDateTime(double unixTimeStamp)
+        {
+            // Unix timestamp is seconds past epoch
+            System.DateTime dtDateTime = new DateTime(1970, 1, 1, 0, 0, 0, 0, System.DateTimeKind.Utc);
+            dtDateTime = dtDateTime.AddSeconds(unixTimeStamp);
+            return dtDateTime;
+        }
+
+
+    }
+
+    class RequestBody
+    {
+        public string method { get; set; }
+        public object[] @params { get; set; }
+    }
+
+    class ResponseBlock
+    {
+        public Block result { get; set; }
+        public string error { get; set; }
+        public string id { get; set; }
+    }
+
+    class Block
+    {
+        public string hash { get; set; }
+        public string pow_hash { get; set; }
+        public int confirmations { get; set; }
+        public int size { get; set; }
+        public int height { get; set; }
+        public int version { get; set; }
+        public string merkleroot { get; set; }
+        public string[] tx { get; set; }
+        public int time { get; set; }
+        public long nonce { get; set; }
+        public string bits { get; set; }
+        public float difficulty { get; set; }
+        public string previousblockhash { get; set; }
+        public string nextblockhash { get; set; }
+
+
+        public string Json { get; set; }
+    }
+
+    class ResponseTransaction
+    {
+        public Transaction result { get; set; }
+        public string error { get; set; }
+        public string id { get; set; }
+    }
+
+    class Transaction
+    {
+        public string hex { get; set; }
+        public string txid { get; set; }
+        public int version { get; set; }
+        public int locktime { get; set; }
+        public TransactionInput[] vin { get; set; }
+        public TransactionOutput[] vout { get; set; }
+        public string blockhash { get; set; }
+        public int confirmations { get; set; }
+        public int time { get; set; }
+        public int blocktime { get; set; }
+
+        public string Json { get; set; }
+    }
+
+    class TransactionInput
+    {
+        public string coinbase { get; set; }
+        public string txid { get; set; }
+        public long vout { get; set; }
+        public TransactionScriptSig scriptSig { get; set; }
+        public long sequence { get; set; }
+
+
+        public string Json { get; set; }
+    }
+
+    class TransactionOutput
+    {
+        public decimal value { get; set; }
+        public int n { get; set; }
+        public TransactionScriptPubKey scriptPubKey { get; set; }
+
+
+        public string Json { get; set; }
+    }
+
+    class TransactionScriptSig
+    {
+        public string asm { get; set; }
+        public string hex { get; set; }
+    }
+
+    class TransactionScriptPubKey
+    {
+        public string asm { get; set; }
+        public string hex { get; set; }
+        public int reqSigs { get; set; }
+        public string type { get; set; }
+        public string[] addresses { get; set; }
+    }
+}
