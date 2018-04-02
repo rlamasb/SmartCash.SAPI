@@ -353,31 +353,6 @@ echo "
   }
 }" > ~/SAPI/API/appsettings.json
 
-
-
-sudo apt install -y apache2
-sudo apt install -y sysfsutils
-#Setup reverse proxy.
-sudo a2enmod proxy
-sudo a2enmod proxy_http
-sudo a2enmod proxy_balancer
-sudo a2enmod lbmethod_byrequests
-sudo systemctl restart apache2
- 
- 
-
-echo "
-<VirtualHost *:80>
-ProxyPreserveHost On
-ProxyRequests Off
-ServerName sapi.smartcash.cc
-ServerAlias sapi.smartcash.cc
-DocumentRoot /SAPI/API
-ProxyPass / http://localhost:5000/
-ProxyPassReverse / http://localhost:5000/
-</VirtualHost>
-" > /etc/apache2/sites-enabled/000-default.conf
-
 cd
 cd SAPI/API
 dotnet SAPI.API.dll &
