@@ -13,6 +13,9 @@ namespace SAPI.API.Controllers
     public class AddressController : BaseController
     {
 
+        /// <summary>
+        ///     Returns address balance
+        /// </summary>
         [HttpGet("balance/{address}", Name = "Balance")]
         public IActionResult GetBalance(string address)
         {
@@ -39,8 +42,8 @@ namespace SAPI.API.Controllers
                     }
                     catch (Exception ex)
                     {
-                        Console.Write(ex.Message);
-                        throw;
+                        return StatusCode(400, ex.Message);
+                        
                     }
                 }
                 return new ObjectResult(balance);
@@ -72,8 +75,8 @@ namespace SAPI.API.Controllers
                     }
                     catch (Exception ex)
                     {
-                        Console.Write(ex.Message);
-                        throw;
+                        return StatusCode(400, ex.Message);
+                        
                     }
                 }
                 return new ObjectResult(unspent);

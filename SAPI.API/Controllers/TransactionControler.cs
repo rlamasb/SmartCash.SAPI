@@ -66,8 +66,8 @@ namespace SAPI.API.Controllers
                         }
                         catch (Exception ex)
                         {
-                            Console.Write(ex.Message);
-                            throw;
+                            return StatusCode(400, ex.Message);
+                            
                         }
                     }
 
@@ -86,8 +86,8 @@ namespace SAPI.API.Controllers
                         }
                         catch (Exception ex)
                         {
-                            Console.Write(ex.Message);
-                            throw;
+                            return StatusCode(400, ex.Message);
+                            
                         }
                     }
 
@@ -106,8 +106,8 @@ namespace SAPI.API.Controllers
                         }
                         catch (Exception ex)
                         {
-                            Console.Write(ex.Message);
-                            throw;
+                            return StatusCode(400, ex.Message);
+                            
                         }
                     }
 
