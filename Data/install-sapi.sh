@@ -7,6 +7,46 @@ if [ "$(whoami)" != "root" ]; then
   exit -1
 fi
 
+# Get parameter variables
+_rpcUserName=$1
+_rpcPassword=$2
+DOMAIN=$3
+EMAIL=$4
+
+# Set variables if not defined
+if [ -z $DOMAIN ]; then
+  # Get RCP username and password
+  printf "Enter SmartCash RCP Username (in your smartcash.conf): "
+  read _rpcUserName
+  printf "Enter SmartCash RCP Password (in your smartcash.conf): "
+  read _rpcPassword
+
+  # Get domain name for Lets Encrypt script
+  echo "LetsEncrypt SSL certbot is used to generate a SSL certificate for your domain"
+  printf "Enter API domain name without www prefix (ex: smartcashapi.cc): "
+  read DOMAIN
+  if [[ $DOMAIN == *"."* ]] && host $DOMAIN > /dev/null 2>&1; then
+    :
+  else
+    echo "Domain name $DOMAIN not found."
+    exit 1
+  fi
+
+  # Get email address for Lets Encrypt script
+  printf "Enter email for SSL registration (recommended) or press Enter to continue without email: "
+  read EMAIL
+  if [ -z $EMAIL ]; then
+    :
+  else
+    if [[ "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$ ]]; then
+      :
+    else
+      echo "Email address $EMAIL is invalid."
+      exit 1
+    fi
+  fi
+fi
+
 # Choose a random and secure password for db user
 _sqlPassword=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32 ; echo '')
 
@@ -80,8 +120,8 @@ unzip -o AppSync.zip
 # Create Sync appsettings.json
 echo "{
   \"SyncDb\": \"${_sqlPassword}\",
-  \"rpcuser\": \"${1}\",
-  \"rpcpass\": \"${2}\"
+  \"rpcuser\": \"${_rpcUserName}\",
+  \"rpcpass\": \"${_rpcPassword}\"
 }" > appsettings.json
 
 # Setup SQL
@@ -223,11 +263,11 @@ server {
 
 # Configure LetsEncrypt SSL
 service nginx restart
-sed -i -e "s/server_name _/server_name $3 www.$3/g" default
-if [ -z $4 ]; then
-  certbot --nginx --agree-tos --non-interactive --redirect --staple-ocsp --register-unsafely-without-email -d "$3" -d www."$3"
+sed -i -e "s/server_name _/server_name $DOMAIN www.$DOMAIN/g" default
+if [ -z $EMAIL ]; then
+  certbot --nginx --agree-tos --non-interactive --redirect --staple-ocsp --register-unsafely-without-email -d "$DOMAIN" -d www."$DOMAIN"
 else
-  certbot --nginx --agree-tos --non-interactive --redirect --staple-ocsp -m "$4" --no-eff-email -d "$3" -d www."$3"
+  certbot --nginx --agree-tos --non-interactive --redirect --staple-ocsp -m "$EMAIL" --no-eff-email -d "$DOMAIN" -d www."$DOMAIN"
 fi
 service nginx restart
 
