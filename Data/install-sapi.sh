@@ -15,6 +15,19 @@ EMAIL=$4
 
 # Set variables if not defined
 if [ -z $DOMAIN ]; then
+  # Kill SAPI crontab, processes and delete folders for reinstall
+  if [ -d ~/SAPI ]; then
+    (crontab -l | grep -v "~/SAPI/API/apimakerun.sh") | crontab -
+    (crontab -l | grep -v "~/SAPI/Sync/syncmakerun.sh") | crontab -
+    pIDAPI=$(ps -ef | grep "dotnet SAPI.API.dll" | awk '{print $2}')
+    pIDSync=$(ps -ef | grep "dotnet SAPI.Sync.dll" | awk '{print $2}')
+    kill ${pIDAPI}
+    kill ${pIDSync}
+    systemctl stop mssql-server
+    rm -rf ~/SAPI/
+    rm -rf /smartdata/
+  fi
+
   # Get RCP username and password
   printf "Enter SmartCash RCP Username (in your smartcash.conf): "
   read _rpcUserName
