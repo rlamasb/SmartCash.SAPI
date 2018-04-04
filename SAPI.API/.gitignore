@@ -326,3 +326,6 @@ ASALocalRun/
 # Remove Data file
 data.zip
 appsettings.Development.json
+D:/IDGLog.txt
+SuperNodeLog.txt
+.git/
