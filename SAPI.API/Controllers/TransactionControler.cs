@@ -6,12 +6,18 @@ using Microsoft.Extensions.Configuration;
 using System.IO;
 using SAPI.API.Model;
 using System;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace SAPI.API.Controllers
 {
     [Route("api/[controller]")]
     public class TransactionController : BaseController
     {
+        public TransactionController(IHostingEnvironment hostingEnvironment, ILogger<AddressController> log) : base(hostingEnvironment, log)
+        {
+            
+        }
 
         [HttpPost("send", Name = "SendTransaction")]
         public IActionResult SendTransaction([FromBody] GenericRequestModel<string> txHex)
@@ -31,7 +37,7 @@ namespace SAPI.API.Controllers
         }
 
         [HttpGet("{txid}", Name = "Transaction")]
-        public IActionResult GetUnspent(string txid)
+        public IActionResult GetTransaction(string txid)
         {
             BitcoinLib.Responses.GetRawTransactionResponse tx = new BitcoinLib.Responses.GetRawTransactionResponse();
             Transaction transaction = new Transaction();

@@ -10,25 +10,30 @@ using System.Reflection;
 using BitcoinLib.Services.Coins.Bitcoin;
 using BitcoinLib.Responses;
 using BitcoinLib.Responses.SharedComponents;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.Extensions.Logging;
 
 namespace SAPI.API.Controllers
 {
     public class BaseController : Controller
     {
         private static IConfiguration Configuration { get; set; }
-
         internal static BitcoinService CoinService;
+        
         internal static string connString = string.Empty;
         static string serverURL = "http://127.0.0.1:9679";
         static string serverUser = string.Empty;
         static string serverPass = string.Empty;
-        public BaseController()
+        readonly ILogger<BaseController> logger;
+        public BaseController(IHostingEnvironment hostingEnvironment, ILogger<BaseController> log)
         {
+            logger = log;
 
             var builder = new ConfigurationBuilder()
-                        .SetBasePath((Directory.GetCurrentDirectory()))
+                        .SetBasePath(hostingEnvironment.ContentRootPath)
                         .AddJsonFile("appsettings.json");
             Configuration = builder.Build();
+
 
 
             connString = $"Server=tcp:localhost,1433;Initial Catalog=SAPI;User ID=sa;Password={Configuration["SyncDb"]};Connection Timeout=30;";
