@@ -86,8 +86,8 @@ echo "{
 
 # Setup SQL
 MSSQL_SA_PASSWORD=$_sqlPassword \
-    MSSQL_PID='express' \
-    /opt/mssql/bin/mssql-conf -n setup accept-eula
+  MSSQL_PID='express' \
+  /opt/mssql/bin/mssql-conf -n setup accept-eula
 
 # Add SQL Server tools to the path by default
 echo PATH="$PATH:/opt/mssql-tools/bin" >> ~/.bash_profile
@@ -141,22 +141,19 @@ counter=1
 blocktotal=$(curl -s https://explorer3.smartcash.cc/api/getblockcount)
 echo "Total blocks to sync: $blocktotal"
 re='^[0-9]+$'
-while [ $counter -le 60 ]
-do
-	currentblock=$(smartcash-cli getblockcount)
-
-	if ! [[ $currentblock =~ $re ]]; then
-		echo $currentblock
+while [ $counter -le 60 ]; do
+  currentblock=$(smartcash-cli getblockcount)
+  if ! [[ $currentblock =~ $re ]]; then
+    echo $currentblock
   else
-		if [ $currentblock -ge $blocktotal ]; then
+    if [ $currentblock -ge $blocktotal ]; then
       counter=61
     fi;
 
-		echo "Waiting for wallet to sync..."
-		echo "$currentblock" of "$blocktotal" blocks
-	fi
-
-	sleep 30s
+    echo "Waiting for wallet to sync..."
+    echo "$currentblock" of "$blocktotal" blocks
+  fi
+  sleep 30s
   ((counter++))
 done
 echo "Finished syncing blocks"
@@ -197,30 +194,30 @@ limit_req_zone \$binary_remote_addr zone=one:10m rate=10r/s;
 limit_conn_zone \$binary_remote_addr zone=addr:10m;
 
 server {
-	listen 80 default_server;
-	listen [::]:80 default_server;
+  listen 80 default_server;
+  listen [::]:80 default_server;
 
-	# Server name to be replaced
-	server_name _;
+  # Server name to be replaced
+  server_name _;
 
-	# Drop slow connections
-	client_body_timeout 5s;
-    client_header_timeout 5s;
+  # Drop slow connections
+  client_body_timeout 5s;
+  client_header_timeout 5s;
 
-	# Proxy to Transaction API
-	location / {
-        limit_req zone=one burst=5 nodelay;
-		limit_conn addr 10;
-		proxy_http_version 1.1;
-		proxy_pass http://localhost:5000;
-		proxy_pass_header Server;
-		proxy_set_header Connection 'upgrade';
-		proxy_set_header Host \$http_host;
-		proxy_set_header Upgrade \$http_upgrade;
-		proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-		proxy_set_header X-Forwarded-Proto \$scheme;
-		proxy_set_header X-Real-IP \$remote_addr;
-		proxy_redirect off;
+  # Proxy to Transaction API
+  location / {
+    limit_req zone=one burst=5 nodelay;
+    limit_conn addr 10;
+    proxy_http_version 1.1;
+    proxy_pass http://localhost:5000;
+    proxy_pass_header Server;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host \$http_host;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_redirect off;
 	}
 }" > default
 
