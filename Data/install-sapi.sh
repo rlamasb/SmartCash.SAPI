@@ -276,7 +276,7 @@ server {
     proxy_set_header X-Forwarded-Proto \$scheme;
     proxy_set_header X-Real-IP \$remote_addr;
     proxy_redirect off;
-	}
+  }
 }" > default
 
 # Configure LetsEncrypt SSL
