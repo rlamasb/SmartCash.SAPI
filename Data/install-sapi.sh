@@ -7,6 +7,59 @@ if [ "$(whoami)" != "root" ]; then
   exit -1
 fi
 
+# Get parameter variables
+_rpcUserName=$1
+_rpcPassword=$2
+DOMAIN=$3
+EMAIL=$4
+
+# Set variables if not defined
+if [ -z $DOMAIN ]; then
+  # Kill SAPI crontab, processes and delete folders for reinstall
+  if [ -d ~/SAPI ]; then
+    (crontab -l | grep -v "~/SAPI/API/apimakerun.sh") | crontab -
+    (crontab -l | grep -v "~/SAPI/Sync/syncmakerun.sh") | crontab -
+    pIDAPI=$(ps -ef | grep "dotnet SAPI.API.dll" | awk '{print $2}')
+    pIDSync=$(ps -ef | grep "dotnet SAPI.Sync.dll" | awk '{print $2}')
+    kill ${pIDAPI}
+    kill ${pIDSync}
+    systemctl stop mssql-server
+    rm -rf ~/SAPI/
+    rm -rf /smartdata/
+  fi
+
+  # Get RCP username and password
+  printf "Enter SmartCash RCP Username (in your smartcash.conf): "
+  read _rpcUserName
+  printf "Enter SmartCash RCP Password (in your smartcash.conf): "
+  read _rpcPassword
+
+  # Get domain name for Lets Encrypt script
+  echo "LetsEncrypt SSL certbot is used to generate a SSL certificate for your domain"
+  printf "Enter API domain name without www prefix (ex: smartcashapi.cc): "
+  read DOMAIN
+  if [[ $DOMAIN == *"."* ]] && host $DOMAIN > /dev/null 2>&1; then
+    :
+  else
+    echo "Domain name $DOMAIN not found."
+    exit 1
+  fi
+
+  # Get email address for Lets Encrypt script
+  printf "Enter email for SSL registration (recommended) or press Enter to continue without email: "
+  read EMAIL
+  if [ -z $EMAIL ]; then
+    :
+  else
+    if [[ "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$ ]]; then
+      :
+    else
+      echo "Email address $EMAIL is invalid."
+      exit 1
+    fi
+  fi
+fi
+
 # Choose a random and secure password for db user
 _sqlPassword=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32 ; echo '')
 
@@ -80,14 +133,14 @@ unzip -o AppSync.zip
 # Create Sync appsettings.json
 echo "{
   \"SyncDb\": \"${_sqlPassword}\",
-  \"rpcuser\": \"${1}\",
-  \"rpcpass\": \"${2}\"
+  \"rpcuser\": \"${_rpcUserName}\",
+  \"rpcpass\": \"${_rpcPassword}\"
 }" > appsettings.json
 
 # Setup SQL
 MSSQL_SA_PASSWORD=$_sqlPassword \
-    MSSQL_PID='express' \
-    /opt/mssql/bin/mssql-conf -n setup accept-eula
+  MSSQL_PID='express' \
+  /opt/mssql/bin/mssql-conf -n setup accept-eula
 
 # Add SQL Server tools to the path by default
 echo PATH="$PATH:/opt/mssql-tools/bin" >> ~/.bash_profile
@@ -141,22 +194,19 @@ counter=1
 blocktotal=$(curl -s https://explorer3.smartcash.cc/api/getblockcount)
 echo "Total blocks to sync: $blocktotal"
 re='^[0-9]+$'
-while [ $counter -le 60 ]
-do
-	currentblock=$(smartcash-cli getblockcount)
-
-	if ! [[ $currentblock =~ $re ]]; then
-		echo $currentblock
+while [ $counter -le 60 ]; do
+  currentblock=$(smartcash-cli getblockcount)
+  if ! [[ $currentblock =~ $re ]]; then
+    echo $currentblock
   else
-		if [ $currentblock -ge $blocktotal ]; then
+    if [ $currentblock -ge $blocktotal ]; then
       counter=61
     fi;
 
-		echo "Waiting for wallet to sync..."
-		echo "$currentblock" of "$blocktotal" blocks
-	fi
-
-	sleep 30s
+    echo "Waiting for wallet to sync..."
+    echo "$currentblock" of "$blocktotal" blocks
+  fi
+  sleep 30s
   ((counter++))
 done
 echo "Finished syncing blocks"
@@ -197,40 +247,40 @@ limit_req_zone \$binary_remote_addr zone=one:10m rate=10r/s;
 limit_conn_zone \$binary_remote_addr zone=addr:10m;
 
 server {
-	listen 80 default_server;
-	listen [::]:80 default_server;
+  listen 80 default_server;
+  listen [::]:80 default_server;
 
-	# Server name to be replaced
-	server_name _;
+  # Server name to be replaced
+  server_name _;
 
-	# Drop slow connections
-	client_body_timeout 5s;
-    client_header_timeout 5s;
+  # Drop slow connections
+  client_body_timeout 5s;
+  client_header_timeout 5s;
 
-	# Proxy to Transaction API
-	location / {
-        limit_req zone=one burst=5 nodelay;
-		limit_conn addr 10;
-		proxy_http_version 1.1;
-		proxy_pass http://localhost:5000;
-		proxy_pass_header Server;
-		proxy_set_header Connection 'upgrade';
-		proxy_set_header Host \$http_host;
-		proxy_set_header Upgrade \$http_upgrade;
-		proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-		proxy_set_header X-Forwarded-Proto \$scheme;
-		proxy_set_header X-Real-IP \$remote_addr;
-		proxy_redirect off;
+  # Proxy to Transaction API
+  location / {
+    limit_req zone=one burst=5 nodelay;
+    limit_conn addr 10;
+    proxy_http_version 1.1;
+    proxy_pass http://localhost:5000;
+    proxy_pass_header Server;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host \$http_host;
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_redirect off;
 	}
 }" > default
 
 # Configure LetsEncrypt SSL
 service nginx restart
-sed -i -e "s/server_name _/server_name $3 www.$3/g" default
-if [ -z $4 ]; then
-  certbot --nginx --agree-tos --non-interactive --redirect --staple-ocsp --register-unsafely-without-email -d "$3" -d www."$3"
+sed -i -e "s/server_name _/server_name $DOMAIN www.$DOMAIN/g" default
+if [ -z $EMAIL ]; then
+  certbot --nginx --agree-tos --non-interactive --redirect --staple-ocsp --register-unsafely-without-email -d "$DOMAIN" -d www."$DOMAIN"
 else
-  certbot --nginx --agree-tos --non-interactive --redirect --staple-ocsp -m "$4" --no-eff-email -d "$3" -d www."$3"
+  certbot --nginx --agree-tos --non-interactive --redirect --staple-ocsp -m "$EMAIL" --no-eff-email -d "$DOMAIN" -d www."$DOMAIN"
 fi
 service nginx restart
 
