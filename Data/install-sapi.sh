@@ -13,6 +13,9 @@ _rpcPassword=$2
 DOMAIN=$3
 EMAIL=$4
 
+# Get the IP address of your vps which will be hosting the smartnode
+_nodeIpAddress=$(ip route get 1 | awk '{print $NF;exit}')
+
 # Set variables if not defined
 if [ -z $DOMAIN ]; then
   # Kill SAPI crontab, processes and delete folders for reinstall
@@ -38,10 +41,12 @@ if [ -z $DOMAIN ]; then
   echo "LetsEncrypt SSL certbot is used to generate a SSL certificate for your domain"
   printf "Enter API domain name without www prefix (ex: smartcashapi.cc): "
   read DOMAIN
-  if [[ $DOMAIN == *"."* ]] && host $DOMAIN > /dev/null 2>&1; then
-    :
-  else
-    echo "Domain name $DOMAIN not found."
+  if [ "$(getent hosts $DOMAIN | awk '{ print $1 }')" != "$_nodeIpAddress" ]; then
+    echo "DNS A Record for $DOMAIN must set to your server IP address $_nodeIpAddress"
+    exit 1
+  fi
+  if [ "$(getent hosts www.$DOMAIN | awk '{ print $1 }')" != "$_nodeIpAddress" ]; then
+    echo "DNS A Record for www.$DOMAIN must set to your server IP address $_nodeIpAddress"
     exit 1
   fi
 
@@ -54,7 +59,7 @@ if [ -z $DOMAIN ]; then
     if [[ "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$ ]]; then
       :
     else
-      echo "Email address $EMAIL is invalid."
+      echo "Email address $EMAIL is invalid"
       exit 1
     fi
   fi
