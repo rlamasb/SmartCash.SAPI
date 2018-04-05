@@ -45,6 +45,9 @@ echo "WARNING: This script will reboot the server when it's finished."
 printf "Press Ctrl+C to cancel or Enter to continue: "
 read IGNORE
 
+# Get the IP address of your vps which will be hosting the smartnode
+_nodeIpAddress=$(ip route get 1 | awk '{print $NF;exit}')
+
 cd
 # Changing the SSH Port to a custom number is a good security measure against DDOS attacks
 printf "Custom SSH Port(Enter to ignore): "
@@ -63,10 +66,12 @@ if [ "$API" = "Y" ]; then
   echo "LetsEncrypt SSL certbot is used to generate a SSL certificate for your domain"
   printf "Enter API domain name without www prefix (ex: smartcashapi.cc): "
   read DOMAIN
-  if [[ $DOMAIN == *"."* ]] && host $DOMAIN > /dev/null 2>&1; then
-    :
-  else
-    echo "Domain name $DOMAIN not found."
+  if [ "$(getent hosts $DOMAIN | awk '{ print $1 }')" != "$_nodeIpAddress" ]; then
+    echo "DNS A Record for $DOMAIN must set to your server IP address $_nodeIpAddress"
+    exit 1
+  fi
+  if [ "$(getent hosts www.$DOMAIN | awk '{ print $1 }')" != "$_nodeIpAddress" ]; then
+    echo "DNS A Record for www.$DOMAIN must set to your server IP address $_nodeIpAddress"
     exit 1
   fi
 
@@ -79,7 +84,7 @@ if [ "$API" = "Y" ]; then
     if [[ "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$ ]]; then
       :
     else
-      echo "Email address $EMAIL is invalid."
+      echo "Email address $EMAIL is invalid"
       exit 1
     fi
   fi
@@ -90,9 +95,6 @@ _rpcUserName=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 12 ; echo '')
 
 # Choose a random and secure password for the RPC
 _rpcPassword=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32 ; echo '')
-
-# Get the IP address of your vps which will be hosting the smartnode
-_nodeIpAddress=$(ip route get 1 | awk '{print $NF;exit}')
 
 # Make a new directory for smartcash daemon
 mkdir ~/.smartcash/
