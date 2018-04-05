@@ -29,14 +29,14 @@ The main `install.sh` script will setup a SmartNode and the RPC API. For fast bo
 
 ```console
 root@server:~$ wget https://rawgit.com/rlamasb/SmartCash.SAPI/master/install.sh
-root@server:~$ bash install.sh`
+root@server:~$ bash install.sh
 ```
 
 #### Only SAPI:
 
 ```console
 root@server:~$ wget https://rawgit.com/rlamasb/SmartCash.SAPI/master/Data/install-sapi.sh
-root@server:~$ bash install-sapi.sh`
+root@server:~$ bash install-sapi.sh
 ```
 
 ## License
