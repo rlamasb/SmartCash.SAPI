@@ -295,11 +295,9 @@ ufw allow 443/tcp
 # Enable firewall
 ufw --force enable
 
-#Force Sync Make Run
-cd 
+# Force Sync Make Run
 cd ~/SAPI/Sync/
 bash syncmakerun.sh
-
 
 # Reboot the server
 reboot
