@@ -30,7 +30,7 @@ namespace SAPI.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(400, ex.Message);
+                return BadRequest(ex.ToErrorObject());
             }
 
             return new ObjectResult(txid);
@@ -55,7 +55,7 @@ namespace SAPI.API.Controllers
             }
             catch (Exception ex)
             {
-                return StatusCode(400, ex.Message);
+                return BadRequest(ex.ToErrorObject());
             }
             return new ObjectResult(transaction);
 
