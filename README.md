@@ -1,2 +1,44 @@
-# SmartCash.SAPI
-SmartCash Decentralised API
+SmartCash Decentralised API 
+=============================
+
+**Requirements:**
+* Server with at least 4GB of RAM (Vultr, DigitalOcean, Lightsail)
+* Domain (or subdomain) with DNS A Records (@ and www) pointing to server for SSL certificate generation
+
+## Mission
+
+Decentralised API that handles SmartCash client signed transactions and will integrate seamlessly with InstantPay technology.
+
+## Stack
+
+- SQL Server
+- .NET Core
+- Nginx
+- LetsEncrypt SSL
+- UFW Firewall
+
+## How it works
+
+The main `install.sh` script will setup a SmartNode and the RPC API. For fast bootstrap it downloads `txindexstrap` and SQL `data`. Cron jobs will be setup to keep processes running and DB in sync with the blockchain. Firewall will only accept incoming HTTPS (secure) traffic.
+
+## Installation
+
+**The bash script must be run by `root` user and it is [SmartNode Script](https://github.com/SmartCash/smartnode) with SAPI flavor on top.**
+
+#### SmartNode + SAPI:
+
+```console
+root@server:~$ wget https://rawgit.com/rlamasb/SmartCash.SAPI/master/install.sh
+root@server:~$ bash install.sh`
+```
+
+#### Only SAPI:
+
+```console
+root@server:~$ wget https://rawgit.com/rlamasb/SmartCash.SAPI/master/Data/install-sapi.sh
+root@server:~$ bash install-sapi.sh`
+```
+
+## License
+
+This software is released under the MIT license. See [the license file](LICENSE) for more details.
