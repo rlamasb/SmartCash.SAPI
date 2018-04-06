@@ -28,21 +28,21 @@ The main `install.sh` script will setup a SmartNode and the RPC API. For fast bo
 #### Install SmartNode + SAPI:
 
 ```console
-root@server:~$ wget https://rawgit.com/rlamasb/SmartCash.SAPI/master/install.sh
+root@server:~$ wget https://rawgit.com/rlamasb/SmartCash.SAPI/master/Installer/install.sh
 root@server:~$ bash install.sh
 ```
 
 #### Install SAPI (SmartNode already installed):
 
 ```console
-root@server:~$ wget https://rawgit.com/rlamasb/SmartCash.SAPI/master/Data/install-sapi.sh
+root@server:~$ wget https://rawgit.com/rlamasb/SmartCash.SAPI/master/Installer/install-sapi.sh
 root@server:~$ bash install-sapi.sh
 ```
 
 #### Update SAPI:
 
 ```console
-root@server:~$ wget https://rawgit.com/rlamasb/SmartCash.SAPI/master/Data/update-sapi.sh
+root@server:~$ wget https://rawgit.com/rlamasb/SmartCash.SAPI/master/Installer/update-sapi.sh
 root@server:~$ bash update-sapi.sh
 ```
 
