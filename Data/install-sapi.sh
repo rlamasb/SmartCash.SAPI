@@ -216,14 +216,6 @@ while [ $counter -le 60 ]; do
 done
 echo "Finished syncing blocks"
 
-# Run Sync
-cd ~/SAPI/Sync/
-dotnet SAPI.Sync.dll &
-
-# Run API
-cd ~/SAPI/API/
-dotnet SAPI.API.dll &
-
 # Create a cronjob for making sure web api is always running
 if ! crontab -l | grep "~/SAPI/API/apimakerun.sh"; then
   (crontab -l ; echo "* * * * * ~/SAPI/API/apimakerun.sh") | crontab -
@@ -237,6 +229,10 @@ fi
 # Give execute permission to the cron scripts
 chmod 0700 ~/SAPI/API/apimakerun.sh
 chmod 0700 ~/SAPI/Sync/syncmakerun.sh
+
+# Run API and Sync
+bash ~/SAPI/API/apimakerun.sh
+bash ~/SAPI/Sync/syncmakerun.sh
 
 # Configure Nginx
 cd /etc/nginx/sites-available
@@ -294,10 +290,6 @@ ufw allow 443/tcp
 
 # Enable firewall
 ufw --force enable
-
-# Force Sync Make Run
-cd ~/SAPI/Sync/
-bash syncmakerun.sh
 
 # Reboot the server
 reboot
