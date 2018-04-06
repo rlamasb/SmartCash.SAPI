@@ -2,7 +2,7 @@ SmartCash Decentralised API
 =============================
 
 **Requirements:**
-* Server with at least 4GB of RAM (Vultr, DigitalOcean, Lightsail)
+* Ubuntu 16.04 LTS x64 server with at least 4GB of RAM (Vultr, DigitalOcean, Lightsail)
 * Domain (or subdomain) with DNS A Records (@ and www) pointing to server for SSL certificate generation
 
 ## Mission
