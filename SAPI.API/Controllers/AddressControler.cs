@@ -48,7 +48,7 @@ namespace SAPI.API.Controllers
                     }
                     catch (Exception ex)
                     {
-                        return StatusCode(400, ex.Message);
+                        return BadRequest(ex.ToErrorObject());
 
                     }
                 }
@@ -81,8 +81,7 @@ namespace SAPI.API.Controllers
                     }
                     catch (Exception ex)
                     {
-                        return StatusCode(400, ex.Message);
-
+                        return BadRequest(ex.ToErrorObject());
                     }
                 }
                 return new ObjectResult(unspent);
@@ -115,7 +114,7 @@ namespace SAPI.API.Controllers
                     }
                     catch (Exception ex)
                     {
-                        return StatusCode(400, ex.Message);
+                        return BadRequest(ex.ToErrorObject());
 
                     }
                 }
@@ -123,7 +122,7 @@ namespace SAPI.API.Controllers
             }
 
             if (unspent.Sum(u => u.Value) < request.Amount)
-                return StatusCode(400, "Amount exceeds the balance.");
+                return BadRequest(new Exception("Amount exceeds the balance.").ToErrorObject());
                 
             List<AddressUnspent> data = new List<AddressUnspent>();
 
