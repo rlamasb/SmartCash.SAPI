@@ -187,9 +187,9 @@ ufw default deny incoming
 ufw default allow outgoing
 
 if [ "$API" = "Y" ]; then
-  ## Run Transaction API script
+  ## Run Transaction API installer script
   cd
-  wget https://raw.githubusercontent.com/rlamasb/SmartCash.SAPI/master/Data/install-sapi.sh
+  wget https://raw.githubusercontent.com/rlamasb/SmartCash.SAPI/master/Installer/install-sapi.sh
   bash install-sapi.sh $_rpcUserName $_rpcPassword $DOMAIN $EMAIL
 else
   # Enable firewall
