@@ -167,6 +167,16 @@ if ! crontab -l | grep "~/smartnode/clearlog.sh"; then
   (crontab -l ; echo "0 0 */2 * * ~/smartnode/clearlog.sh") | crontab -
 fi
 
+# Create a cronjob to keep smartcashd cpu usage below 40%
+if ! crontab -l | grep "cpulimit -P /usr/bin/smartcashd"; then
+  (crontab -l ; echo "@reboot cpulimit -P /usr/bin/smartcashd -l 40") | crontab -
+fi
+
+# Create a cronjob to keep mssql-server cpu usage below 40%
+if ! crontab -l | grep "cpulimit -P /lib/systemd/system/mssql-server.service"; then
+  (crontab -l ; echo "@reboot cpulimit -P /lib/systemd/system/mssql-server.service -l 40") | crontab -
+fi
+
 # Give execute permission to the cron scripts
 chmod 0700 ./makerun.sh
 chmod 0700 ./checkdaemon.sh
