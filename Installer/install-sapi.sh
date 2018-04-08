@@ -22,10 +22,14 @@ if [ -z $DOMAIN ]; then
   if [ -d ~/SAPI ]; then
     (crontab -l | grep -v "~/SAPI/API/apimakerun.sh") | crontab -
     (crontab -l | grep -v "~/SAPI/Sync/syncmakerun.sh") | crontab -
+    (crontab -l | grep -v "~/SAPI/Mssql/mssqlmakerun.sh") | crontab -
+    (crontab -l | grep -v "~/SAPI/nginx/nginxmakerun.sh") | crontab -
+    (crontab -l | grep -v "reboot systemctl start mssql-server") | crontab -
     pIDAPI=$(ps -ef | grep "dotnet SAPI.API.dll" | awk '{print $2}')
     pIDSync=$(ps -ef | grep "dotnet SAPI.Sync.dll" | awk '{print $2}')
     kill ${pIDAPI}
     kill ${pIDSync}
+    service nginx stop
     systemctl stop mssql-server
     rm -rf ~/SAPI/
     rm -rf /smartdata/
@@ -85,6 +89,9 @@ sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubu
 apt-get update
 apt-get install dotnet-sdk-2.1.4 -y
 
+# Install python module need to ssl verification
+apt-get install python-pyasn1 python-pyasn1-modules
+
 # Install Nginx and LetsEncrypt CertBot
 apt-get install nginx -y
 add-apt-repository ppa:certbot/certbot -y
@@ -131,9 +138,30 @@ mkdir -p ~/SAPI/Sync
 # Change the directory to ~/SAPI/Sync
 cd ~/SAPI/Sync
 
+# Download Sync script
+wget https://raw.githubusercontent.com/rlamasb/SmartCash.SAPI/master/Data/syncmakerun.sh
+
 # Download App Sync
 wget https://raw.githubusercontent.com/rlamasb/SmartCash.SAPI/master/Data/AppSync.zip
 unzip -o AppSync.zip
+
+# Make a new directory for Mssql
+mkdir -p ~/SAPI/Mssql
+
+# Change the directory to ~/SAPI/Mssql
+cd ~/SAPI/Mssql
+
+# Download App Mssql
+wget https://raw.githubusercontent.com/rlamasb/SmartCash.SAPI/master/Data/mssqlmakerun.sh
+
+# Make a new directory for nginx
+mkdir -p ~/SAPI/nginx
+
+# Change the directory to ~/SAPI/nginx
+cd ~/SAPI/nginx
+
+# Download App Mssql
+wget https://raw.githubusercontent.com/rlamasb/SmartCash.SAPI/master/Data/nginxmakerun.sh
 
 # Create Sync appsettings.json
 echo "{
@@ -175,9 +203,6 @@ if [ $errstatus = 1 ]; then
   exit 1
 fi
 
-# Download Sync script
-wget https://raw.githubusercontent.com/rlamasb/SmartCash.SAPI/master/Data/syncmakerun.sh
-
 # Make a new directory for SQL
 mkdir -p /smartdata/data
 
@@ -216,6 +241,11 @@ while [ $counter -le 60 ]; do
 done
 echo "Finished syncing blocks"
 
+# Create a cronjob for making sure mssql-server runs after reboot
+if ! crontab -l | grep "@reboot systemctl start mssql-server"; then
+  (crontab -l ; echo "@reboot systemctl start mssql-server") | crontab -
+fi
+
 # Create a cronjob for making sure web api is always running
 if ! crontab -l | grep "~/SAPI/API/apimakerun.sh"; then
   (crontab -l ; echo "* * * * * ~/SAPI/API/apimakerun.sh") | crontab -
@@ -226,13 +256,27 @@ if ! crontab -l | grep "~/SAPI/Sync/syncmakerun.sh"; then
   (crontab -l ; echo "* * * * * ~/SAPI/Sync/syncmakerun.sh") | crontab -
 fi
 
+# Create a cronjob for making sure mssqlmakerun is always running
+if ! crontab -l | grep "~/SAPI/Mssql/mssqlmakerun.sh"; then
+  (crontab -l ; echo "*/5 * * * * ~/SAPI/Mssql/mssqlmakerun.sh") | crontab -
+fi
+
+# Create a cronjob for making sure nginx is always running
+if ! crontab -l | grep "~/SAPI/nginx/nginxmakerun.sh"; then
+  (crontab -l ; echo "*/5 * * * * ~/SAPI/nginx/nginxmakerun.sh") | crontab -
+fi
+
 # Give execute permission to the cron scripts
 chmod 0700 ~/SAPI/API/apimakerun.sh
 chmod 0700 ~/SAPI/Sync/syncmakerun.sh
+chmod 0700 ~/SAPI/Mssql/mssqlmakerun.sh
+chmod 0700 ~/SAPI/nginx/nginxmakerun.sh
 
-# Run API and Sync
+# Run API, Sync and Mssql script
 bash ~/SAPI/API/apimakerun.sh
 bash ~/SAPI/Sync/syncmakerun.sh
+bash ~/SAPI/Mssql/mssqlmakerun.sh
+bash ~/SAPI/nginx/nginxmakerun.sh
 
 # Configure Nginx
 cd /etc/nginx/sites-available
@@ -240,24 +284,18 @@ mv default backup-default
 echo "##
 # Transaction API configuration
 ##
-
 # IP Request Rate Limit (10 requests per second)
 limit_req_zone \$binary_remote_addr zone=one:10m rate=10r/s;
-
 # IP Connections Limit (10 connections)
 limit_conn_zone \$binary_remote_addr zone=addr:10m;
-
 server {
   listen 80 default_server;
   listen [::]:80 default_server;
-
   # Server name to be replaced
   server_name _;
-
   # Drop slow connections
   client_body_timeout 5s;
   client_header_timeout 5s;
-
   # Proxy to Transaction API
   location / {
     limit_req zone=one burst=5 nodelay;
@@ -278,6 +316,7 @@ server {
 # Configure LetsEncrypt SSL
 service nginx restart
 sed -i -e "s/server_name _/server_name $DOMAIN www.$DOMAIN/g" default
+service nginx restart
 if [ -z $EMAIL ]; then
   certbot --nginx --agree-tos --non-interactive --redirect --staple-ocsp --register-unsafely-without-email -d "$DOMAIN" -d www."$DOMAIN"
 else
@@ -287,6 +326,9 @@ service nginx restart
 
 # Allow HTTPS traffic (443)
 ufw allow 443/tcp
+
+# Disable http traffic (80)
+ufw deny 80
 
 # Enable firewall
 ufw --force enable
