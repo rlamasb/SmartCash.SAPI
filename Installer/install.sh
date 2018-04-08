@@ -12,15 +12,19 @@ while true; do
   if [ -d ~/.smartcash ]; then
     printf "~/.smartcash/ already exists! The installer will delete this folder. Continue anyway?(Y/n)"
     read REPLY
-    if [ ${REPLY} == "Y" ]; then
+    if [ ${REPLY} == "Y" ] || [ ${REPLY} == "y" ]; then
       # Kill SAPI crontab, processes and delete folders for reinstall
       if [ -d ~/SAPI ]; then
         (crontab -l | grep -v "~/SAPI/API/apimakerun.sh") | crontab -
         (crontab -l | grep -v "~/SAPI/Sync/syncmakerun.sh") | crontab -
+        (crontab -l | grep -v "~/SAPI/Mssql/mssqlmakerun.sh") | crontab -
+        (crontab -l | grep -v "~/SAPI/nginx/nginxmakerun.sh") | crontab -
+        (crontab -l | grep -v "reboot systemctl start mssql-server") | crontab -
         pIDAPI=$(ps -ef | grep "dotnet SAPI.API.dll" | awk '{print $2}')
         pIDSync=$(ps -ef | grep "dotnet SAPI.Sync.dll" | awk '{print $2}')
         kill ${pIDAPI}
         kill ${pIDSync}
+        service nginx stop
         systemctl stop mssql-server
         rm -rf ~/SAPI/
         rm -rf /smartdata/
@@ -31,7 +35,7 @@ while true; do
       rm -rf ~/.smartcash/
       break
     else
-      if [ ${REPLY} == "n" ]; then
+      if [ ${REPLY} == "N" ] || [ ${REPLY} == "n" ]; then
         exit
       fi
     fi
@@ -61,7 +65,7 @@ read _nodePrivateKey
 # Ask if wants to install Transaction API
 printf "Do you wish to install and run Transaction API (Y/n)? "
 read API
-if [ "$API" = "Y" ]; then
+if [ "$API" = "Y" ] || [ "$API" = "y" ]; then
   # Get domain name for Lets Encrypt script
   echo "LetsEncrypt SSL certbot is used to generate a SSL certificate for your domain"
   printf "Enter API domain name without www prefix (ex: smartcashapi.cc): "
@@ -190,13 +194,14 @@ sed -i "s/[#]\{0,1\}[ ]\{0,1\}Port [0-9]\{2,\}/Port ${_sshPortNumber}/g" /etc/ss
 apt install ufw -y
 ufw disable
 ufw allow 9678
+ufw allow 80
 ufw allow "$_sshPortNumber"/tcp
 ufw limit "$_sshPortNumber"/tcp
 ufw logging on
 ufw default deny incoming
 ufw default allow outgoing
 
-if [ "$API" = "Y" ]; then
+if [ "$API" = "Y" ] || [ "$API" = "y" ]; then
   ## Run Transaction API installer script
   cd
   wget https://raw.githubusercontent.com/rlamasb/SmartCash.SAPI/master/Installer/install-sapi.sh
