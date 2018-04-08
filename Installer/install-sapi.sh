@@ -272,7 +272,7 @@ chmod 0700 ~/SAPI/Sync/syncmakerun.sh
 chmod 0700 ~/SAPI/Mssql/mssqlmakerun.sh
 chmod 0700 ~/SAPI/nginx/nginxmakerun.sh
 
-# Run API, Sync and Mssql script
+# Run API, Sync, Mssql and nginx script
 bash ~/SAPI/API/apimakerun.sh
 bash ~/SAPI/Sync/syncmakerun.sh
 bash ~/SAPI/Mssql/mssqlmakerun.sh
