@@ -67,6 +67,7 @@ read VARIABLE
 _sshPortNumber=${VARIABLE:-$_currentPort}
 if ! [ "$_sshPortNumber" -ge 0 -a "$_sshPortNumber" -le 65535 ]; then
   echo "SSH Port $_sshPortNumber is invalid"
+  exit 1
 fi
 
 # Get a new privatekey by going to console >> debug and typing smartnode genkey
@@ -74,6 +75,7 @@ printf "SmartNode GenKey: "
 read _nodePrivateKey
 if ! [[ "$_nodePrivateKey" =~ ^7[QRS][1-9A-HJ-NP-Za-km-z]{49}$ ]]; then
   echo "SmartNode GenKey $_nodePrivateKey is invalid"
+  exit 1
 fi
 
 # Get domain name for Lets Encrypt script
@@ -102,6 +104,20 @@ else
     exit 1
   fi
 fi
+
+# Change the SSH port
+sed -i "s/[#]\{0,1\}[ ]\{0,1\}Port [0-9]\{2,\}/Port ${_sshPortNumber}/g" /etc/ssh/sshd_config
+
+# Firewall security measures
+apt install ufw -y
+ufw disable
+ufw --force reset
+ufw allow 9678
+ufw allow "$_sshPortNumber"/tcp
+ufw limit "$_sshPortNumber"/tcp
+ufw logging on
+ufw default deny incoming
+ufw default allow outgoing
 
 # The RPC node will only accept connections from your localhost
 _rpcUserName=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 12 ; echo '')
@@ -395,20 +411,6 @@ chmod 0700 ~/SAPI/API/apimakerun.sh
 chmod 0700 ~/SAPI/Sync/syncmakerun.sh
 chmod 0700 ~/SAPI/Mssql/mssqlmakerun.sh
 chmod 0700 ~/SAPI/nginx/nginxmakerun.sh
-
-# Change the SSH port
-sed -i "s/[#]\{0,1\}[ ]\{0,1\}Port [0-9]\{2,\}/Port ${_sshPortNumber}/g" /etc/ssh/sshd_config
-
-# Firewall security measures
-apt install ufw -y
-ufw disable
-ufw --force reset
-ufw allow 9678
-ufw allow "$_sshPortNumber"/tcp
-ufw limit "$_sshPortNumber"/tcp
-ufw logging on
-ufw default deny incoming
-ufw default allow outgoing
 
 # Run API, Sync, Mssql and nginx script
 bash ~/SAPI/API/apimakerun.sh
