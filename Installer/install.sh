@@ -94,12 +94,8 @@ fi
 # Get email address for Lets Encrypt script
 printf "Enter email for SSL registration (recommended) or press Enter to continue without email: "
 read EMAIL
-if [ -z $EMAIL ]; then
-  :
-else
-  if [[ "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$ ]]; then
-    :
-  else
+if ! [ -z $EMAIL ]; then
+  if ! [[ "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$ ]]; then
     echo "Email address $EMAIL is invalid"
     exit 1
   fi
