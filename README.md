@@ -32,13 +32,6 @@ root@server:~$ wget https://rawgit.com/rlamasb/SmartCash.SAPI/master/Installer/i
 root@server:~$ bash install.sh
 ```
 
-#### Install SAPI (SmartNode already installed):
-
-```console
-root@server:~$ wget https://rawgit.com/rlamasb/SmartCash.SAPI/master/Installer/install-sapi.sh
-root@server:~$ bash install-sapi.sh
-```
-
 #### Update SAPI:
 
 ```console
