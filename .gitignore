@@ -325,3 +325,5 @@ ASALocalRun/
 
 # Remove Data file
 data.zip
+
+.DS_STORE
