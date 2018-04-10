@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -52,7 +53,7 @@ namespace SAPI.API
         public void Configure(IApplicationBuilder app, IHostingEnvironment env, ILoggerFactory loggerFactory)
         {
             app.UseOptions();
-            
+            app.UseStaticFiles();
             app.UseCors("AllowAllOrigin");
 
             if (env.IsDevelopment())
@@ -67,7 +68,11 @@ namespace SAPI.API
 
             app.UseMvc();
             app.UseSwagger();
-            app.UseSwaggerUI(c => { c.SwaggerEndpoint("/swagger/v1/swagger.json", "SAPI - SmartCash"); });
+            app.UseSwaggerUI(c => {
+                c.SwaggerEndpoint("/swagger/v1/swagger.json", "SAPI - SmartCash");
+                c.InjectStylesheet("/swagger/custom.css");
+                c.IndexStream = () => GetType().GetTypeInfo().Assembly.GetManifestResourceStream("SAPI.API.swagger.index.html");
+            });
         }
 
 
