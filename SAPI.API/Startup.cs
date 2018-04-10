@@ -72,6 +72,7 @@ namespace SAPI.API
                 c.SwaggerEndpoint("/swagger/v1/swagger.json", "SAPI - SmartCash");
                 c.InjectStylesheet("/swagger/custom.css");
                 c.IndexStream = () => GetType().GetTypeInfo().Assembly.GetManifestResourceStream("SAPI.API.swagger.index.html");
+                c.RoutePrefix = "help";
             });
         }
 
