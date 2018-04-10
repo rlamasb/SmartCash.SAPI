@@ -209,8 +209,8 @@ _sqlPassword=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 32 ; echo '')
 echo "
 {
   \"SyncDb\": \"${_sqlPassword}\",
-  \"rpcuser\": \"${1}\",
-  \"rpcpass\": \"${2}\",
+  \"rpcuser\": \"${_rpcUserName}\",
+  \"rpcpass\": \"${_rpcPassword}\",
   \"Logging\": {
     \"IncludeScopes\": false,
     \"Debug\": {
