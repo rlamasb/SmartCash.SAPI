@@ -15,7 +15,7 @@ read IGNORE
 # Remove past installation
 while true; do
   if [ -d ~/.smartcash ]; then
-    printf "SmartCash and SAPI already exist! The installer will delete the previous installation. Continue anyway? (Y/[n])"
+    printf "SmartCash and SAPI already exist! The installer will delete the previous installation. Continue anyway? (Y/[n]) "
     read REPLY
     if [ ${REPLY} == "Y" ] || [ ${REPLY} == "y" ]; then
       # Kill SAPI crontab, processes and delete folders for reinstall
