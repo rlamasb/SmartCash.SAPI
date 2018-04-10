@@ -99,7 +99,9 @@ namespace SAPI.Sync
 
                 }
 
+                int topBlock = Convert.ToInt32(CoinService.GetBlockCount());
                 GetBlockResponse curBlock = new GetBlockResponse();
+
                 if (startBlockHash == null || startBlockHash == "") // Start from scratch
                 {
                     startBlockHash = "00000009c4e61bee0e8d6236f847bb1dd23f4c61ca5240b74852184c9bf98c30"; // Block 1
@@ -157,8 +159,8 @@ namespace SAPI.Sync
                     // Block
                     curBlock = GetBlock(curBlock.NextBlockHash);
 
-                    Console.WriteLine("Processing Block:" + curBlock.Height.ToString());
-
+                    Console.Write("\r Processing Block {0} of {1}", curBlock.Height.ToString(), topBlock.ToString());
+                   
                     InsertBlock(curBlock);
 
                     // Transaction
@@ -376,7 +378,7 @@ namespace SAPI.Sync
             {
                 string coinbase = transactionInput.CoinBase;
                 string txidOut = transactionInput.TxId;
-                long indexOut = index;
+                long indexOut = Convert.ToInt32(transactionInput.Vout);
                 string sAddress = "";
                 decimal sValue = 0;
 
