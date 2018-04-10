@@ -7,10 +7,15 @@ if [ "$(whoami)" != "root" ]; then
   exit -1
 fi
 
+# Warning that the script will reboot the server
+echo "WARNING: This script will reboot the server when it's finished."
+printf "Press Ctrl+C to cancel or Enter to continue: "
+read IGNORE
+
 # Remove past installation
 while true; do
   if [ -d ~/.smartcash ]; then
-    printf "SmartCash and SAPI already exist! The installer will delete the previous installation. Continue anyway? (Y/[n])"
+    printf "SmartCash and SAPI already exist! The installer will delete the previous installation. Continue anyway? (Y/[n]) "
     read REPLY
     if [ ${REPLY} == "Y" ] || [ ${REPLY} == "y" ]; then
       # Kill SAPI crontab, processes and delete folders for reinstall
@@ -51,11 +56,6 @@ while true; do
     break
   fi
 done
-
-# Warning that the script will reboot the server
-echo "WARNING: This script will reboot the server when it's finished."
-printf "Press Ctrl+C to cancel or Enter to continue: "
-read IGNORE
 
 # Get the IP address of your vps which will be hosting the smartnode
 _nodeIpAddress=$(ip route get 1 | awk '{print $NF;exit}')
@@ -172,7 +172,7 @@ apt-get update
 apt-get install dotnet-sdk-2.1.4 -y
 
 # Install python module need to ssl verification
-apt-get install python-pyasn1 python-pyasn1-modules
+apt-get install python-pyasn1 python-pyasn1-modules -y
 
 # Install Nginx and LetsEncrypt CertBot
 apt-get install nginx -y
