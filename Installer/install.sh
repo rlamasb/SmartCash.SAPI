@@ -235,9 +235,6 @@ mkdir -p ~/SAPI/Sync
 # Change the directory to ~/SAPI/Sync
 cd ~/SAPI/Sync
 
-# Download Sync script
-wget https://raw.githubusercontent.com/rlamasb/SmartCash.SAPI/master/Data/syncmakerun.sh
-
 # Download App Sync
 wget https://raw.githubusercontent.com/rlamasb/SmartCash.SAPI/master/Data/AppSync.zip
 unzip -o AppSync.zip
@@ -248,6 +245,9 @@ echo "{
   \"rpcuser\": \"${_rpcUserName}\",
   \"rpcpass\": \"${_rpcPassword}\"
 }" > appsettings.json
+
+# Download Sync script
+wget https://raw.githubusercontent.com/rlamasb/SmartCash.SAPI/master/Data/syncmakerun.sh
 
 # Make a new directory for Mssql
 mkdir -p ~/SAPI/Mssql
