@@ -48,6 +48,54 @@ namespace SAPI.API.Controllers
                 tx = CoinService.GetRawTransaction(txid, 1);
                 transaction.Confirmation = tx.Confirmations;
 
+                using (SqlConnection conn = new SqlConnection(connString))
+                {
+                    conn.Open();
+
+                    string selectString = "SELECT * FROM [TransactionInput] WHERE txidin = @txid";
+                    using (SqlCommand comm = new SqlCommand(selectString, conn))
+                    {
+                        comm.Parameters.AddWithValue("@txid", txid);
+
+                        try
+                        {
+                            using (SqlDataReader dr = comm.ExecuteReader())
+                            {
+                                transaction.TransactionInput = DataReaderMapToList<TransactionInput>(dr);
+                            }
+
+                        }
+                        catch (Exception ex)
+                        {
+                            return StatusCode(400, ex.Message);
+                            
+                        }
+                    }
+
+                    selectString = "SELECT * FROM [TransactionOutput] WHERE txid = @txid";
+                    using (SqlCommand comm = new SqlCommand(selectString, conn))
+                    {
+                        comm.Parameters.AddWithValue("@txid", txid);
+
+                        try
+                        {
+                            using (SqlDataReader dr = comm.ExecuteReader())
+                            {
+                                transaction.TransactionOutput = DataReaderMapToList<TransactionOutput>(dr);
+                            }
+
+                        }
+                        catch (Exception ex)
+                        {
+                            return StatusCode(400, ex.Message);
+                            
+                        }
+                    }
+
+                }
+
+
+
                 transaction.BlockHash = tx.BlockHash;
                 transaction.Time = Common.UnixTimeStampToDateTime(tx.Time);
                 transaction.Txid = tx.TxId;
