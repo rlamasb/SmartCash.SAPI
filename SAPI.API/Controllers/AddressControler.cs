@@ -55,6 +55,53 @@ namespace SAPI.API.Controllers
                 return new ObjectResult(balance);
             }
         }
+
+        [HttpPost("balances/", Name = "Balances")]
+        public IActionResult GetBalances([FromBody] List<string> addresses)
+        {
+        
+            List<AddressBalance> balance = new List<AddressBalance>();
+            List<string> query = new List<string>();
+
+            foreach (var item in addresses)
+            {
+                query.Add("'" + item + "'");
+            }
+            
+
+            string selectString = @"
+                     SELECT a.*
+                       FROM vAddressBalance a 
+                      WHERE a.Address in (" +string.Join(",", query) +")";
+
+
+            using (SqlConnection conn = new SqlConnection(connString))
+            {
+
+                using (SqlCommand comm = new SqlCommand(selectString, conn))
+                {
+                    try
+                    {
+                        conn.Open();
+                        using (SqlDataReader dr = comm.ExecuteReader())
+                        {
+                            balance = DataReaderMapToList<AddressBalance>(dr);
+                        }
+
+                    }
+                    catch (Exception ex)
+                    {
+                        return BadRequest(ex.ToErrorObject());
+
+                    }
+                }
+                return new ObjectResult(balance);
+            }
+
+        }
+
+
+
         [HttpGet("unspent/{address}", Name = "Unspent")]
         public IActionResult GetUnspent(string address)
         {
@@ -122,7 +169,7 @@ namespace SAPI.API.Controllers
             }
 
             if (unspent.Sum(u => u.Value) < request.Amount)
-                return BadRequest(new Exception("Amount exceeds the balance.").ToErrorObject());
+                return BadRequest(new Exception("Amount exceeds the balance of [" + unspent.Sum(u => u.Value).ToString() + "]").ToErrorObject());
                 
             List<AddressUnspent> data = new List<AddressUnspent>();
 
