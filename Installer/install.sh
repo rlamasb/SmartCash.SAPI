@@ -172,7 +172,7 @@ apt-get update
 apt-get install dotnet-sdk-2.1.4 -y
 
 # Install python module need to ssl verification
-apt-get install python-pyasn1 python-pyasn1-modules -y
+apt-get install python3-pyasn1 -y
 
 # Install Nginx and LetsEncrypt CertBot
 apt-get install nginx -y
