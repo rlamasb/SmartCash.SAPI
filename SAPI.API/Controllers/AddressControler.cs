@@ -56,10 +56,51 @@ namespace SAPI.API.Controllers
             }
         }
 
+
+        /// <summary>
+        ///     Returns address balance
+        /// </summary>
+        [HttpPost("deposits", Name = "DepositHistory")]
+        public IActionResult GetDepositHistory([FromBody] DepositHistoryRequestModel data)
+        {
+            List<DepositHistory> history = new List<DepositHistory>();
+            string cmdString = "EXEC Address_Deposit_History @address, @dateFrom, @dateTo, @PageNumber,	@PageSize";
+
+            using (SqlConnection conn = new SqlConnection(connString))
+            {
+
+                using (SqlCommand comm = new SqlCommand())
+                {
+                    comm.Connection = conn;
+                    comm.CommandText = cmdString;
+                    comm.Parameters.AddWithValue("@address", data.Address );
+                    comm.Parameters.AddWithValue("@dateFrom", (object)data.DateFrom ?? DBNull.Value);
+                    comm.Parameters.AddWithValue("@dateTo", (object)data.DateTo ?? DBNull.Value);
+                    comm.Parameters.AddWithValue("@PageNumber", (object)data.PageNumber ?? 1);
+                    comm.Parameters.AddWithValue("@PageSize", (object)data.PageSize ?? 10);
+                    try
+                    {
+                        conn.Open();
+                        using (SqlDataReader dr = comm.ExecuteReader())
+                        {
+                            history = DataReaderMapToList<DepositHistory>(dr);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        return BadRequest(ex.ToErrorObject());
+                    }
+                }
+            }
+            return new ObjectResult(history);
+
+
+        }
+
         [HttpPost("balances/", Name = "Balances")]
         public IActionResult GetBalances([FromBody] List<string> addresses)
         {
-        
+
             List<AddressBalance> balance = new List<AddressBalance>();
             List<string> query = new List<string>();
 
@@ -67,12 +108,12 @@ namespace SAPI.API.Controllers
             {
                 query.Add("'" + item + "'");
             }
-            
+
 
             string selectString = @"
                      SELECT a.*
                        FROM vAddressBalance a 
-                      WHERE a.Address in (" +string.Join(",", query) +")";
+                      WHERE a.Address in (" + string.Join(",", query) + ")";
 
 
             using (SqlConnection conn = new SqlConnection(connString))
@@ -140,7 +181,7 @@ namespace SAPI.API.Controllers
         {
             List<AddressUnspent> unspent = new List<AddressUnspent>();
 
-            string selectString = "SELECT * FROM [vAddressUnspent] WHERE Address = @Address";
+            string selectString = "SELECT *, '' as ScriptPubKey FROM [vAddressUnspent] WHERE Address = @Address";
 
 
             using (SqlConnection conn = new SqlConnection(connString))
@@ -168,9 +209,16 @@ namespace SAPI.API.Controllers
 
             }
 
-            if (unspent.Sum(u => u.Value) < request.Amount)
+            decimal fee = 0.001m;
+            var newFee = (((unspent.Count * 148) + (2 * 34) + 10 + 9) / 1024m) * fee;
+            if (newFee > fee)
+                fee = newFee;
+
+            fee = (decimal)RoundUp((double)fee, 3);
+
+            if (unspent.Sum(u => u.Value) < (request.Amount + fee))
                 return BadRequest(new Exception("Amount exceeds the balance of [" + unspent.Sum(u => u.Value).ToString() + "]").ToErrorObject());
-                
+
             List<AddressUnspent> data = new List<AddressUnspent>();
 
             foreach (var item in unspent.OrderByDescending(t => t.Value))
@@ -180,17 +228,37 @@ namespace SAPI.API.Controllers
                     break;
             }
 
-            decimal fee = 0.001m;
-            var newFee = (((data.Count * 148) + (2 * 34) + 10 + 9) / 1024m) * fee;
+            fee = 0.001m;
+            newFee = (((data.Count * 148) + (2 * 34) + 10 + 9) / 1024m) * fee;
             if (newFee > fee)
                 fee = newFee;
 
 
             fee = (decimal)RoundUp((double)fee, 3);
 
+            string scriptPubKey = string.Empty;
+
+            foreach (var item in data)
+            {
+
+                var raw = CoinService.GetRawTransaction(item.Txid, 1);
+
+                foreach (var v in raw.Vout)
+                {
+                    if (Convert.ToDecimal(v.Value) == item.Value && v.ScriptPubKey.Addresses.ToList().Contains(item.Address))
+                    {
+                        scriptPubKey = v.ScriptPubKey.Hex;
+                        break;
+                    }
+                }
+                if (!string.IsNullOrEmpty(scriptPubKey))
+                    break;
+            }
+
             return new ObjectResult(new
             {
                 Fee = fee,
+                ScriptPubKey = scriptPubKey,
                 Inputs = data
             });
 
