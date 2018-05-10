@@ -1,5 +1,5 @@
 #!/bin/bash
-# install.sh
+# install-private-network.sh
 # Installs SmartNode and Transaction API on Ubuntu 16.04 LTS x64
 
 if [ "$(whoami)" != "root" ]; then
@@ -78,27 +78,13 @@ if ! [[ "$_nodePrivateKey" =~ ^7[QRS][1-9A-HJ-NP-Za-km-z]{49}$ ]]; then
   exit 1
 fi
 
-# Get domain name for Lets Encrypt script
-echo "LetsEncrypt SSL certbot is used to generate a SSL certificate for your domain"
-printf "Enter API domain name without www prefix (ex: smartcashapi.cc): "
-read DOMAIN
-if [ "$(getent hosts $DOMAIN | awk '{ print $1 }')" != "$_nodeIpAddress" ]; then
-  echo "DNS A Record for $DOMAIN must set to your server IP address $_nodeIpAddress"
+# Get private network adapter
+echo "This installer allows incoming traffic on port 80 from the private network (ex: load balancer)"
+printf "Enter the private network interface (ex: ens7): "
+read INTERFACE
+if [ ! -f "/sys/class/net/$INTERFACE/operstate" ]; then
+  echo "Interface does not exist"
   exit 1
-fi
-if [ "$(getent hosts www.$DOMAIN | awk '{ print $1 }')" != "$_nodeIpAddress" ]; then
-  echo "DNS A Record for www.$DOMAIN must set to your server IP address $_nodeIpAddress"
-  exit 1
-fi
-
-# Get email address for Lets Encrypt script
-printf "Enter email for SSL registration (recommended) or press Enter to continue without email: "
-read EMAIL
-if ! [ -z $EMAIL ]; then
-  if ! [[ "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,4}$ ]]; then
-    echo "Email address $EMAIL is invalid"
-    exit 1
-  fi
 fi
 
 # Change the SSH port
@@ -109,6 +95,7 @@ apt install ufw -y
 ufw disable
 ufw --force reset
 ufw allow 9678
+ufw allow in on "$INTERFACE" to any port 80
 ufw allow "$_sshPortNumber"/tcp
 ufw limit "$_sshPortNumber"/tcp
 ufw logging on
@@ -171,14 +158,8 @@ sh -c 'echo "deb [arch=amd64] https://packages.microsoft.com/repos/microsoft-ubu
 apt-get update
 apt-get install dotnet-sdk-2.1.4 -y
 
-# Install python module need to ssl verification
-apt-get install python3-pyasn1 -y
-
-# Install Nginx and LetsEncrypt CertBot
+# Install Nginx
 apt-get install nginx -y
-add-apt-repository ppa:certbot/certbot -y
-apt-get update -y
-apt-get install python-certbot-nginx -y
 
 # Create a directory for smartnode's cronjobs and the anti-ddos script
 mkdir ~/smartnode/
@@ -427,8 +408,6 @@ limit_conn_zone \$binary_remote_addr zone=addr:10m;
 server {
   listen 80 default_server;
   listen [::]:80 default_server;
-  # Server name to be replaced
-  server_name _;
   # Drop slow connections
   client_body_timeout 5s;
   client_header_timeout 5s;
@@ -448,19 +427,6 @@ server {
     proxy_redirect off;
   }
 }" > default
-
-# Configure LetsEncrypt SSL
-sed -i -e "s/server_name _/server_name $DOMAIN www.$DOMAIN/g" default
-service nginx restart
-if [ -z $EMAIL ]; then
-  certbot --nginx --agree-tos --non-interactive --redirect --staple-ocsp --register-unsafely-without-email -d "$DOMAIN" -d www."$DOMAIN"
-else
-  certbot --nginx --agree-tos --non-interactive --redirect --staple-ocsp -m "$EMAIL" --no-eff-email -d "$DOMAIN" -d www."$DOMAIN"
-fi
-service nginx restart
-
-# Allow HTTPS traffic (443)
-ufw allow 443/tcp
 
 # Enable firewall
 ufw --force enable
