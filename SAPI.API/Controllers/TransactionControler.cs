@@ -8,11 +8,12 @@ using SAPI.API.Model;
 using System;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
+using BitcoinLib.Responses;
 
 namespace SAPI.API.Controllers
 {
     [Route("api/[controller]")]
-    
+
     public class TransactionController : BaseController
     {
         public TransactionController(IHostingEnvironment hostingEnvironment, ILogger<AddressController> log) : base(hostingEnvironment, log)
@@ -28,13 +29,39 @@ namespace SAPI.API.Controllers
             try
             {
                 txid = CoinService.SendRawTransaction(txHex.Data, false);
+                var raw = Newtonsoft.Json.JsonConvert.SerializeObject(CoinService.DecodeRawTransaction(txHex.Data));
+
+                string cmdString = "INSERT INTO [TransactionBroadcast] ([TxId],[BroadcastTime],[RawTransaction]) VALUES (@TxId, @BroadcastTime, @RawTransaction)";
+                using (SqlConnection conn = new SqlConnection(connString))
+                {
+
+                    using (SqlCommand comm = new SqlCommand())
+                    {
+                        comm.Connection = conn;
+                        comm.CommandText = cmdString;
+                        comm.Parameters.AddWithValue("@TxId", txid);
+                        comm.Parameters.AddWithValue("@BroadcastTime", DateTime.UtcNow);
+                        comm.Parameters.AddWithValue("@RawTransaction", raw);
+                        try
+                        {
+                            conn.Open();
+                            comm.ExecuteNonQuery();
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("SQL Error" + ex.Message);
+
+                        }
+                    }
+                }
+
             }
             catch (Exception ex)
             {
                 return BadRequest(ex.ToErrorObject());
             }
 
-            return new ObjectResult(txid);
+            return new ObjectResult(new { tx = txid });
         }
 
         [HttpGet("{txid}", Name = "Transaction")]
@@ -68,7 +95,7 @@ namespace SAPI.API.Controllers
                         catch (Exception ex)
                         {
                             return StatusCode(400, ex.Message);
-                            
+
                         }
                     }
 
@@ -88,7 +115,7 @@ namespace SAPI.API.Controllers
                         catch (Exception ex)
                         {
                             return StatusCode(400, ex.Message);
-                            
+
                         }
                     }
 
@@ -99,7 +126,7 @@ namespace SAPI.API.Controllers
                 transaction.BlockHash = tx.BlockHash;
                 transaction.Time = Common.UnixTimeStampToDateTime(tx.Time);
                 transaction.Txid = tx.TxId;
-                
+
 
             }
             catch (Exception ex)
@@ -108,6 +135,46 @@ namespace SAPI.API.Controllers
             }
             return new ObjectResult(transaction);
 
+        }
+
+        [HttpGet("check/{txid}", Name = "CheckTransaction")]
+        public IActionResult CheckTransaction(string txid)
+        {
+            using (SqlConnection conn = new SqlConnection(connString))
+            {
+                conn.Open();
+
+                TransactionCheck response = new TransactionCheck();
+                string selectString = "SELECT * FROM [TransactionBroadCast] WHERE txid = @txid";
+                using (SqlCommand comm = new SqlCommand(selectString, conn))
+                {
+                    comm.Parameters.AddWithValue("@txid", txid);
+
+                    try
+                    {
+                        using (SqlDataReader dr = comm.ExecuteReader())
+                        {
+
+                            if (dr.Read())
+                            {
+                                response.Txid = dr["Txid"].ToString();
+                                response.BroadcastTime = Convert.ToDateTime(dr["BroadcastTime"]);
+                                response.Transaction = Newtonsoft.Json.JsonConvert.DeserializeObject<DecodeRawTransactionResponse>(dr["RawTransaction"].ToString());
+                            }
+
+                        }
+                        return new ObjectResult(response);
+                    }
+                    catch (Exception ex)
+                    {
+                        return StatusCode(400, ex.Message);
+
+                    }
+                }
+
+
+
+            }
         }
 
     }
