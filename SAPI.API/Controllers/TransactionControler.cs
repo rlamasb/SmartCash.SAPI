@@ -9,6 +9,7 @@ using System;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Logging;
 using BitcoinLib.Responses;
+using BitcoinLib.Responses.SharedComponents;
 
 namespace SAPI.API.Controllers
 {
@@ -145,6 +146,7 @@ namespace SAPI.API.Controllers
                 conn.Open();
 
                 TransactionCheck response = new TransactionCheck();
+                Transaction transaction = new Transaction();
                 string selectString = "SELECT * FROM [TransactionBroadCast] WHERE txid = @txid";
                 using (SqlCommand comm = new SqlCommand(selectString, conn))
                 {
@@ -160,10 +162,86 @@ namespace SAPI.API.Controllers
                                 response.Txid = dr["Txid"].ToString();
                                 response.BroadcastTime = Convert.ToDateTime(dr["BroadcastTime"]);
                                 response.Transaction = Newtonsoft.Json.JsonConvert.DeserializeObject<DecodeRawTransactionResponse>(dr["RawTransaction"].ToString());
+                                transaction.Time = response.BroadcastTime;
+                                transaction.Txid = response.Txid;
+                            }
+                            else
+                            {
+                                try
+                                {
+                                    response.Transaction = new DecodeRawTransactionResponse();
+                                    var raw = CoinService.GetRawTransaction(txid, 1);
+                                    transaction.BlockHash = raw.BlockHash;
+                                    transaction.Confirmation = raw.Confirmations;
+                                    transaction.Txid = raw.TxId;
+                                    transaction.Time = Common.UnixTimeStampToDateTime(raw.BlockTime);
+                                    response.Txid = raw.TxId;
+                                    response.Transaction.TxId = raw.TxId;
+                                    response.Transaction.Vin = raw.Vin;
+                                    response.Transaction.Vout = raw.Vout;
+
+                                    if (string.IsNullOrEmpty(response.Txid))
+                                    {
+                                        var memPool = CoinService.GetRawMemPool(false);
+
+                                        foreach (var item in memPool.TxIds)
+                                        {
+                                            if (item == txid)
+                                            {
+
+                                                raw = CoinService.GetRawTransaction(txid, 1);
+                                                response.Transaction.TxId = raw.TxId;
+                                                response.Transaction.Vin = raw.Vin;
+                                                response.Transaction.Vout = raw.Vout;
+                                                break;
+
+                                            }
+                                        }
+
+                                    }
+                                }
+                                catch
+                                {
+                                    return StatusCode(400, "Transaction not found!");
+                                }
+
+
+                            }
+
+                            if (string.IsNullOrEmpty(response.Txid))
+                            {
+                                return StatusCode(400, "Transaction not found!");
                             }
 
                         }
-                        return new ObjectResult(response);
+
+
+
+                        var countInput = 0;
+                        foreach (var transactionInput in response.Transaction.Vin)
+                        {
+                            transaction.TransactionInput.Add(GetTransactionInput(transactionInput, txid, countInput));
+                            countInput++;
+                        }
+
+                        foreach (var TransactionOutput in response.Transaction.Vout)
+                        {
+                            transaction.TransactionOutput.Add(
+                                    new TransactionOutput()
+                                    {
+                                        Txid = response.Txid,
+                                        Index = TransactionOutput.N,
+                                        Address = TransactionOutput.ScriptPubKey.Addresses.FirstOrDefault(),
+                                        Value = TransactionOutput.Value
+                                    }
+                            );
+                        }
+
+
+
+
+
+                        return new ObjectResult(transaction);
                     }
                     catch (Exception ex)
                     {
@@ -175,6 +253,64 @@ namespace SAPI.API.Controllers
 
 
             }
+        }
+
+        TransactionInput GetTransactionInput(Vin transactionInput, string txid, int index)
+        {
+            string coinbase = transactionInput.CoinBase;
+            string txidOut = transactionInput.TxId;
+            long indexOut = Convert.ToInt32(transactionInput.Vout);
+            string sAddress = "";
+            decimal sValue = 0;
+            TransactionInput result = new TransactionInput();
+
+            if (coinbase != null)
+            {
+                txidOut = "0000000000000000000000000000000000000000000000000000000000000000";
+                sAddress = "0000000000000000000000000000000000";
+            }
+            else if (txidOut == "0000000000000000000000000000000000000000000000000000000000000000")
+            {
+                indexOut = 0;
+                sAddress = "0000000000000000000000000000000001";
+            }
+            else
+            {
+                string selectString = "SELECT [Address], [Value] FROM [TransactionOutput] WHERE [Txid] = '" + txidOut + "' AND [Index] = " + indexOut;
+                using (SqlConnection conn = new SqlConnection(connString))
+                {
+
+                    using (SqlCommand comm = new SqlCommand(selectString, conn))
+                    {
+                        try
+                        {
+                            conn.Open();
+                            using (SqlDataReader dr = comm.ExecuteReader())
+                            {
+                                while (dr.Read())
+                                {
+                                    sAddress = dr["Address"].ToString();
+                                    sValue = decimal.Parse(dr["Value"].ToString());
+                                }
+                            }
+
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("SQL Error" + ex.Message);
+                            throw;
+                        }
+                    }
+                }
+            }
+            result.TxidIn = txid;
+            result.IndexIn = index;
+            result.TxidOut = txidOut;
+            result.IndexOut = Convert.ToInt32(indexOut);
+            result.Address = sAddress;
+            result.Value = sValue;
+            return result;
+
         }
 
     }

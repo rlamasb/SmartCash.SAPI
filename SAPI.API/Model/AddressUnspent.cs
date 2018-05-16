@@ -1,4 +1,5 @@
 using System;
+using Newtonsoft.Json;
 
 namespace SAPI.API.Model
 {
@@ -8,7 +9,5 @@ namespace SAPI.API.Model
         public short Index { get; set; }
         public string Address { get; set; }
         public decimal Value { get; set; }
-        public string ScriptPubKey { get; set; }
-
     }
 }
