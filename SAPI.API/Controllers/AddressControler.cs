@@ -63,6 +63,12 @@ namespace SAPI.API.Controllers
         [HttpPost("deposits", Name = "DepositHistory")]
         public IActionResult GetDepositHistory([FromBody] DepositHistoryRequestModel data)
         {
+            if (data.PageSize > 100)
+                data.PageSize = 100;
+
+            if (data.PageNumber < 1)
+                data.PageNumber = 1;
+
             List<DepositHistory> history = new List<DepositHistory>();
             string cmdString = "EXEC Address_Deposit_History @address, @dateFrom, @dateTo, @PageNumber,	@PageSize";
 
@@ -73,7 +79,7 @@ namespace SAPI.API.Controllers
                 {
                     comm.Connection = conn;
                     comm.CommandText = cmdString;
-                    comm.Parameters.AddWithValue("@address", data.Address );
+                    comm.Parameters.AddWithValue("@address", data.Address);
                     comm.Parameters.AddWithValue("@dateFrom", (object)data.DateFrom ?? DBNull.Value);
                     comm.Parameters.AddWithValue("@dateTo", (object)data.DateTo ?? DBNull.Value);
                     comm.Parameters.AddWithValue("@PageNumber", (object)data.PageNumber ?? 1);
