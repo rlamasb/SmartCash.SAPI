@@ -411,6 +411,10 @@ server {
   # Drop slow connections
   client_body_timeout 5s;
   client_header_timeout 5s;
+  # Set real IP
+  real_ip_header X-Forwarded-For;
+  set_real_ip_from 0.0.0.0/0;
+  real_ip_recursive on;
   # Proxy to Transaction API
   location / {
     limit_req zone=one burst=5 nodelay;
