@@ -80,7 +80,15 @@ namespace SAPI.API.Controllers
                 {
                     conn.Open();
 
-                    string selectString = "SELECT * FROM [TransactionInput] WHERE txidin = @txid";
+                    string selectString = @" SELECT TxidIn,
+                                                    IndexIn,
+                                                    TxidOut,
+                                                    IndexOut,
+                                                    Address,
+                                                    Value 
+                                               FROM [TransactionInput] 
+                                              WHERE txidin = @txid";
+
                     using (SqlCommand comm = new SqlCommand(selectString, conn))
                     {
                         comm.Parameters.AddWithValue("@txid", txid);
@@ -100,7 +108,13 @@ namespace SAPI.API.Controllers
                         }
                     }
 
-                    selectString = "SELECT * FROM [TransactionOutput] WHERE txid = @txid";
+                    selectString = @"SELECT Txid,
+                                            [Index],
+                                            Address,
+                                            Value 
+                                       FROM [TransactionOutput] 
+                                      WHERE txid = @txid";
+
                     using (SqlCommand comm = new SqlCommand(selectString, conn))
                     {
                         comm.Parameters.AddWithValue("@txid", txid);
@@ -147,7 +161,12 @@ namespace SAPI.API.Controllers
 
                 TransactionCheck response = new TransactionCheck();
                 Transaction transaction = new Transaction();
-                string selectString = "SELECT * FROM [TransactionBroadCast] WHERE txid = @txid";
+                string selectString = @" SELECT TxId,
+                                                BroadcastTime,
+                                                RawTransaction 
+                                           FROM [TransactionBroadCast] 
+                                          WHERE txid = @txid";
+                                          
                 using (SqlCommand comm = new SqlCommand(selectString, conn))
                 {
                     comm.Parameters.AddWithValue("@txid", txid);

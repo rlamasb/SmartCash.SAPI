@@ -27,7 +27,12 @@ namespace SAPI.API.Controllers
         {
             List<AddressBalance> balance = new List<AddressBalance>();
 
-            string selectString = "SELECT TOP 1 * FROM [vAddressBalance] WHERE Address = @Address";
+            string selectString = @" SELECT TOP 1 Address
+                                            Received,
+                                            Sent,
+                                            Balance 
+                                       FROM [vAddressBalance] 
+                                      WHERE Address = @Address";
 
 
             using (SqlConnection conn = new SqlConnection(connString))
@@ -117,7 +122,10 @@ namespace SAPI.API.Controllers
 
 
             string selectString = @"
-                     SELECT a.*
+                     SELECT a.Address,
+                            a.Received,
+                            a.Sent,
+                            a.Balance
                        FROM vAddressBalance a 
                       WHERE a.Address in (" + string.Join(",", query) + ")";
 
@@ -154,7 +162,12 @@ namespace SAPI.API.Controllers
         {
             List<AddressUnspent> unspent = new List<AddressUnspent>();
 
-            string selectString = "SELECT * FROM [vAddressUnspent] WHERE Address = @Address";
+            string selectString = @" SELECT Txid,
+                                            [Index],
+                                            Address,
+                                            Value 
+                                       FROM [vAddressUnspent] 
+                                      WHERE Address = @Address";
 
 
             using (SqlConnection conn = new SqlConnection(connString))
@@ -187,7 +200,13 @@ namespace SAPI.API.Controllers
         {
             List<AddressUnspent> unspent = new List<AddressUnspent>();
 
-            string selectString = "SELECT *, '' as ScriptPubKey FROM [vAddressUnspent] WHERE Address = @Address";
+            string selectString = @" SELECT Txid,
+                                            [Index],
+                                            Address,
+                                            Value, 
+                                            '' as ScriptPubKey 
+                                       FROM [vAddressUnspent] 
+                                      WHERE Address = @Address";
 
 
             using (SqlConnection conn = new SqlConnection(connString))
