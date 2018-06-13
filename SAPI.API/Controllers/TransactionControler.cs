@@ -59,7 +59,7 @@ namespace SAPI.API.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(ex.ToErrorObject());
+                return BadRequest(new ErrorModel() { Error = "Transactions pending, please try again after 1 minute." });
             }
 
             return new ObjectResult(new { tx = txid });
@@ -166,7 +166,7 @@ namespace SAPI.API.Controllers
                                                 RawTransaction 
                                            FROM [TransactionBroadCast] 
                                           WHERE txid = @txid";
-                                          
+
                 using (SqlCommand comm = new SqlCommand(selectString, conn))
                 {
                     comm.Parameters.AddWithValue("@txid", txid);
