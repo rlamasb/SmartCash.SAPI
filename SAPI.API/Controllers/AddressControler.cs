@@ -27,7 +27,7 @@ namespace SAPI.API.Controllers
         {
             List<AddressBalance> balance = new List<AddressBalance>();
 
-            string selectString = @" SELECT TOP 1 Address
+            string selectString = @" SELECT TOP 1 Address,
                                             Received,
                                             Sent,
                                             Balance 
