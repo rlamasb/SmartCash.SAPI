@@ -159,64 +159,9 @@ namespace SAPI.Sync
                     // Block
                     curBlock = GetBlock(curBlock.NextBlockHash);
 
-                    Console.Write("\r Processing Block {0} of {1}", curBlock.Height.ToString(), topBlock.ToString());
-                   
-                    InsertBlock(curBlock);
-
-                    // Transaction
-                    foreach (string txid in curBlock.Tx)
-                    {
-                        try
-                        {
-
-                            GetRawTransactionResponse nextTransaction = GetTransaction(txid);
-
-                            if (!tx.Contains(txid)) //Exclude transactions linked to multiple blocks (Zerocoin Mint/Smartcash Renew)
-                            {
-                                InsertTransaction(nextTransaction);
-
-                                var countInput = 0;
-                                // Input
-                                foreach (Vin transactionInput in nextTransaction.Vin)
-                                {
-                                    InsertTransactionInput(transactionInput, txid, countInput);
-                                    countInput++;
-                                }
-
-                                // Output
-                                foreach (Vout transactionOutput in nextTransaction.Vout)
-                                {
-                                    if (transactionOutput.ScriptPubKey.Addresses != null)
-                                    {
-                                        if (transactionOutput.ScriptPubKey.Addresses.Count > 1)
-                                        {
-                                            Debug.WriteLine("2> Address: " + txid);
-                                        }
-                                        InsertTransactionOutput(transactionOutput, txid);
-                                    }
-                                    else
-                                    {
-                                        Debug.WriteLine("No Address: " + txid);
-                                    }
-                                }
-
-                                tx.Add(txid);
-
-                            }
-                            else
-                            {
-                                UpdateTransaction(nextTransaction);
-                            }
-                        }
-                        catch
-                        {
-
-                        }
-                    }
-
-                    //Console.WriteLine(curBlock.height);
+                    ProcessBlock(curBlock, topBlock);
                 }
-
+                FindMissingBlocks();
 
                 #endregion
 
@@ -225,6 +170,124 @@ namespace SAPI.Sync
 
             }
 
+            void ProcessBlock(GetBlockResponse curBlock, int topBlock)
+            {
+
+
+                Console.Write("\r Processing Block {0} of {1}", curBlock.Height.ToString(), topBlock.ToString());
+
+                InsertBlock(curBlock);
+
+                // Transaction
+                foreach (string txid in curBlock.Tx)
+                {
+                    try
+                    {
+
+                        GetRawTransactionResponse nextTransaction = GetTransaction(txid);
+
+                        if (!tx.Contains(txid)) //Exclude transactions linked to multiple blocks (Zerocoin Mint/Smartcash Renew)
+                        {
+                            InsertTransaction(nextTransaction);
+
+                            var countInput = 0;
+                            // Input
+                            foreach (Vin transactionInput in nextTransaction.Vin)
+                            {
+                                InsertTransactionInput(transactionInput, txid, countInput);
+                                countInput++;
+                            }
+
+                            // Output
+                            foreach (Vout transactionOutput in nextTransaction.Vout)
+                            {
+                                if (transactionOutput.ScriptPubKey.Addresses != null)
+                                {
+                                    if (transactionOutput.ScriptPubKey.Addresses.Count > 1)
+                                    {
+                                        Debug.WriteLine("2> Address: " + txid);
+                                    }
+                                    InsertTransactionOutput(transactionOutput, txid);
+                                }
+                                else
+                                {
+                                    Debug.WriteLine("No Address: " + txid);
+                                }
+                            }
+
+                            tx.Add(txid);
+
+                        }
+                        else
+                        {
+                            UpdateTransaction(nextTransaction);
+                        }
+                    }
+                    catch
+                    {
+
+                    }
+                }
+
+                //Console.WriteLine(curBlock.height);
+
+            }
+
+
+
+            void FindMissingBlocks()
+            {
+                string selectString = @"
+                WITH Missing (missnum, maxid)
+                AS
+                (
+                    SELECT (select min(Height) missnum from [Block]) , (select max(Height) from [Block])
+                    UNION ALL
+                    SELECT missnum + 1, maxid FROM Missing
+                    WHERE missnum < maxid
+                )
+                SELECT missnum
+                FROM Missing
+                LEFT OUTER JOIN [Block] tt on tt.Height = Missing.missnum
+                WHERE tt.Height is NULL
+                OPTION (MAXRECURSION 0);";
+
+                List<int> missing = new List<int>();
+                using (SqlConnection conn = new SqlConnection(connString))
+                {
+
+                    using (SqlCommand comm = new SqlCommand(selectString, conn))
+                    {
+                        try
+                        {
+                            conn.Open();
+                            using (SqlDataReader dr = comm.ExecuteReader())
+                            {
+                                while (dr.Read())
+                                {
+                                    missing.Add(Convert.ToInt32(dr["missnum"]));
+                                }
+                            }
+
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("SQL Error" + ex.Message);
+                            throw;
+                        }
+                    }
+
+                }
+                foreach (var item in missing)
+                {
+                    var hash = CoinService.GetBlockHash(item);
+                    var block = GetBlock(hash);
+                    ProcessBlock(block, item);
+                }
+
+
+
+            }
 
             string GetStartBlockHash()
             {
@@ -312,7 +375,7 @@ namespace SAPI.Sync
             {
                 if (!tx.Contains(transaction.TxId)) //Exclude transactions linked to multiple blocks (Zerocoin Mint/Smartcash Renew)
                 {
-                    string cmdString = "EXEC Transaction_Create @Txid, @BlockHash, @Version, @Time";
+                    string cmdString = "EXEC Transaction_Create @Txid, @BlockHash, @Version, @Time, @IsInstantPay, @IsWebWallet";
                     using (SqlConnection conn = new SqlConnection(connString))
                     {
 
@@ -324,6 +387,8 @@ namespace SAPI.Sync
                             comm.Parameters.AddWithValue("@BlockHash", transaction.BlockHash);
                             comm.Parameters.AddWithValue("@Version", transaction.Version);
                             comm.Parameters.AddWithValue("@Time", UnixTimeStampToDateTime(transaction.Time));
+                            comm.Parameters.AddWithValue("@IsInstantPay", (transaction.LockTime > 0));
+                            comm.Parameters.AddWithValue("@IsWebWallet", false);
                             try
                             {
                                 conn.Open();
@@ -345,7 +410,7 @@ namespace SAPI.Sync
 
             bool UpdateTransaction(GetRawTransactionResponse transaction)
             {
-                string cmdString = "EXEC Transaction_Create @Txid, @BlockHash, @Version, @Time";
+                string cmdString = "EXEC Transaction_Create @Txid, @BlockHash, @Version, @Time, @IsInstantPay, @IsWebWallet";
 
                 using (SqlConnection conn = new SqlConnection(connString))
                 {
@@ -358,6 +423,9 @@ namespace SAPI.Sync
                         comm.Parameters.AddWithValue("@BlockHash", transaction.BlockHash);
                         comm.Parameters.AddWithValue("@Version", transaction.Version);
                         comm.Parameters.AddWithValue("@Time", UnixTimeStampToDateTime(transaction.Time));
+                        comm.Parameters.AddWithValue("@IsInstantPay", (transaction.LockTime > 0));
+                        comm.Parameters.AddWithValue("@IsWebWallet", false);
+
                         try
                         {
                             conn.Open();
