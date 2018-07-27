@@ -44,8 +44,10 @@ while true; do
       (crontab -l | grep -v "~/smartnode/clearlog.sh") | crontab -
       pID=$(ps -ef | grep smartcashd | awk '{print $2}')
       kill ${pID}
+      swapoff ~/swap/swapfile
       rm -rf ~/.smartcash/
       rm -rf ~/smartnode/
+      rm -rf ~/swap/
       break
     else
       if [ ${REPLY} == "N" ] || [ ${REPLY} == "n" ]; then
@@ -101,6 +103,15 @@ ufw limit "$_sshPortNumber"/tcp
 ufw logging on
 ufw default deny incoming
 ufw default allow outgoing
+
+# Creates a 2GB swapfile
+mkdir ~/swap/
+cd ~/swap/
+dd if=/dev/zero of=swapfile bs=1K count=2M
+chmod 600 swapfile
+mkswap swapfile
+swapon swapfile
+echo "~/swap/swapfile none swap sw 0 0" | tee -a /etc/fstab
 
 # The RPC node will only accept connections from your localhost
 _rpcUserName=$(head /dev/urandom | tr -dc A-Za-z0-9 | head -c 12 ; echo '')
