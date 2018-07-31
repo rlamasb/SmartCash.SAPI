@@ -25,69 +25,6 @@ namespace SAPI.API.Controllers
 
         }
 
-
-        private string SendInstantTransaction(GenericRequestModel<string> txHex)
-        {
-            string txid = string.Empty;
-            string errMessage = string.Empty;
-            try
-            {
-                var rpcMethod = "sendrawtransaction";
-                List<object> parameters = new List<object>();
-                parameters.Add(txHex.Data);
-                parameters.Add(false);
-                parameters.Add(1);
-
-
-                var jsonRpcRequest = new JsonRpcRequest(1, rpcMethod.ToString(), parameters.ToArray());
-                var webRequest = (HttpWebRequest)WebRequest.Create(CoinService.Parameters.SelectedDaemonUrl);
-
-                var authInfo = CoinService.Parameters.RpcUsername + ":" + CoinService.Parameters.RpcPassword;
-                authInfo = Convert.ToBase64String(System.Text.Encoding.Default.GetBytes(authInfo));
-                webRequest.Headers["Authorization"] = "Basic " + authInfo;
-
-
-                webRequest.Credentials = new NetworkCredential(CoinService.Parameters.RpcUsername, CoinService.Parameters.RpcPassword);
-                webRequest.ContentType = "application/json-rpc";
-                webRequest.Method = "POST";
-                webRequest.Proxy = null;
-                webRequest.Timeout = CoinService.Parameters.RpcRequestTimeoutInSeconds * 1000;
-                var byteArray = jsonRpcRequest.GetBytes();
-                webRequest.ContentLength = jsonRpcRequest.GetBytes().Length;
-
-
-                using (var dataStream = webRequest.GetRequestStream())
-                {
-                    dataStream.Write(byteArray, 0, byteArray.Length);
-                    dataStream.Dispose();
-                }
-
-                string json;
-
-                using (var webResponse = webRequest.GetResponse())
-                {
-                    using (var stream = webResponse.GetResponseStream())
-                    {
-                        using (var reader = new StreamReader(stream))
-                        {
-                            var result = reader.ReadToEnd();
-                            reader.Dispose();
-                            json = result;
-                        }
-                    }
-                }
-
-                var rpcResponse = JsonConvert.DeserializeObject<JsonRpcResponse<string>>(json);
-                return rpcResponse.Result;
-
-
-            }
-            catch (Exception exception)
-            {
-                throw exception;
-            }
-        }
-
         [HttpPost("send", Name = "SendTransaction")]
         public IActionResult SendTransaction([FromBody] GenericRequestModel<string> txHex)
         {
@@ -96,11 +33,9 @@ namespace SAPI.API.Controllers
             try
             {
 
-                txid = CoinService.SendRawTransaction(txHex.Data, false);
+                //txid = CoinService.SendRawTransaction(txHex.Data, false);
 
-
-                //USE THIS ONCE INSTANT PAY IS ENABLED
-                //txid = SendInstantTransaction(txHex);
+                txid = CoinService.SendRawTransaction(txHex.Data, false, true);
 
                 var raw = Newtonsoft.Json.JsonConvert.SerializeObject(CoinService.DecodeRawTransaction(txHex.Data));
 
@@ -131,13 +66,19 @@ namespace SAPI.API.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(new ErrorModel() { Error = "Transactions pending, please try again after 1 minute. ex: " + ex.Message  });
+                return BadRequest(new ErrorModel() { Error = "Transactions pending, please try again after 1 minute. ex: " + ex.Message });
             }
 
             return new ObjectResult(new
             {
                 tx = txid
             });
+        }
+
+        [HttpGet("BlockHeight", Name = "BlockHeight")]
+        public IActionResult GetBlockHeight()
+        {
+            return new ObjectResult(CoinService.GetBlockCount());
         }
 
         [HttpGet("{txid}", Name = "Transaction")]
