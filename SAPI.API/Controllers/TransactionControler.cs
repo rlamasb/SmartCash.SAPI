@@ -25,17 +25,79 @@ namespace SAPI.API.Controllers
 
         }
 
+        private bool CheckInstantPay(List<TransactionList> senderTxs)
+        {
+            try
+            {
+                decimal total = 0m;
+                decimal amount = 0m;
+
+                string selectString = @"
+                        SELECT Value 
+                          FROM vAddressUnspent 
+                         WHERE Txid = @txid 
+                           AND [Index] = @index";
+
+                using (SqlConnection conn = new SqlConnection(connString))
+                {
+                    conn.Open();
+                    foreach (var item in senderTxs)
+                    {
+                        using (SqlCommand comm = new SqlCommand(selectString, conn))
+                        {
+                            comm.Parameters.AddWithValue("@txid", item.Txid);
+                            comm.Parameters.AddWithValue("@index", item.Index);
+                            using (SqlDataReader dr = comm.ExecuteReader())
+                            {
+                                if (dr.Read())
+                                {
+                                    amount = Convert.ToDecimal(dr["Value"]);
+                                }
+                            }
+                        }
+                        total += amount;
+                        if (total > 100000m)
+                            return false;
+                    }
+                }
+
+                foreach (var item in senderTxs)
+                {
+                    var tx = CoinService.GetRawTransaction(item.Txid, 1);
+                    if (tx.Confirmations <= 2)
+                        return false;
+                }
+
+
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Console.Write(ex.Message);
+                return false;
+            }
+
+        }
+
+
         [HttpPost("send", Name = "SendTransaction")]
         public IActionResult SendTransaction([FromBody] GenericRequestModel<string> txHex)
         {
             string txid = string.Empty;
             string errMessage = string.Empty;
+             bool isInstantPay = true;
             try
             {
 
                 //txid = CoinService.SendRawTransaction(txHex.Data, false);
 
-                txid = CoinService.SendRawTransaction(txHex.Data, false, true);
+                var rawTx = CoinService.DecodeRawTransaction(txHex.Data);
+
+                var senderTxs = rawTx.Vin.Select(t => new TransactionList() { Txid = t.TxId, Index = Convert.ToInt32(t.Vout) }).ToList();
+                isInstantPay = CheckInstantPay(senderTxs);
+
+
+                txid = CoinService.SendRawTransaction(txHex.Data, false, isInstantPay);
 
                 var raw = Newtonsoft.Json.JsonConvert.SerializeObject(CoinService.DecodeRawTransaction(txHex.Data));
 
@@ -71,7 +133,8 @@ namespace SAPI.API.Controllers
 
             return new ObjectResult(new
             {
-                tx = txid
+                tx = txid,
+                isInstantPay = isInstantPay
             });
         }
 

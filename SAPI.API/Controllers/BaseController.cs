@@ -18,7 +18,7 @@ namespace SAPI.API.Controllers
     public class BaseController : Controller
     {
         private static IConfiguration Configuration { get; set; }
-        internal static BitcoinService CoinService;
+        internal static SmartCashLib CoinService;
         
         internal static string connString = string.Empty;
         static string serverURL = "http://127.0.0.1:9679";
@@ -40,7 +40,7 @@ namespace SAPI.API.Controllers
             serverUser = Configuration["rpcuser"];
             serverPass = Configuration["rpcpass"];
 
-            CoinService = new BitcoinService(serverURL,
+            CoinService = new SmartCashLib(serverURL,
                                              serverUser,
                                              serverPass,
                                              "",

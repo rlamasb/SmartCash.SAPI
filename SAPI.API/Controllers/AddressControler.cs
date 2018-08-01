@@ -235,7 +235,7 @@ namespace SAPI.API.Controllers
 
             }
 
-            decimal fee = 0.001m;
+            decimal fee = 0.002m;
             var newFee = (((unspent.Count * 148) + (2 * 34) + 10 + 9) / 1024m) * fee;
             if (newFee > fee)
                 fee = newFee;
@@ -254,7 +254,7 @@ namespace SAPI.API.Controllers
                     break;
             }
 
-            fee = 0.001m;
+            fee = 0.002m;
             newFee = (((data.Count * 148) + (2 * 34) + 10 + 9) / 1024m) * fee;
             if (newFee > fee)
                 fee = newFee;
