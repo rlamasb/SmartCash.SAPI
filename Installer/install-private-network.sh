@@ -310,7 +310,7 @@ chmod a+rxw /smartdata/data/
 
 # Complete wallet Sync
 counter=1
-blocktotal=$(curl -s https://explorer3.smartcash.cc/api/getblockcount)
+blocktotal=$(curl -s https://explorer-webapi.azurewebsites.net/api/smartexplorer/GetLatestBlockSize)
 echo "Total blocks to sync: $blocktotal"
 re='^[0-9]+$'
 while [ $counter -le 60 ]; do
