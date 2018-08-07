@@ -45,6 +45,7 @@ fi
 # Create a cronjob for making sure syncmakerun is always running
 if ! crontab -l | grep "~/SAPI/Sync/syncmakerun.sh"; then
   (crontab -l ; echo "* * * * * ~/SAPI/Sync/syncmakerun.sh") | crontab -
+  (crontab -l ; echo "* * * * * sleep 30 && ~/SAPI/Sync/syncmakerun.sh") | crontab -
 fi
 
 # Give execute permission to the cron scripts
