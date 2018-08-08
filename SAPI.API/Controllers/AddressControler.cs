@@ -39,7 +39,7 @@ namespace SAPI.API.Controllers
             {
 
                 using (SqlCommand comm = new SqlCommand(selectString, conn))
-                
+
                 {
                     comm.Parameters.AddWithValue("@Address", address);
 
@@ -201,13 +201,21 @@ namespace SAPI.API.Controllers
         {
             List<AddressUnspent> unspent = new List<AddressUnspent>();
 
-            string selectString = @" SELECT Txid,
-                                            [Index],
-                                            Address,
-                                            Value, 
+            int block = Convert.ToInt32(CoinService.GetBlockCount()) - 1;
+
+            string selectString = @" SELECT a.Txid,
+                                            a.[Index],
+                                            a.Address,
+                                            a.Value, 
                                             '' as ScriptPubKey 
-                                       FROM [vAddressUnspent] 
-                                      WHERE Address = @Address";
+                                        FROM [vAddressUnspent] a
+                                       INNER JOIN [Transaction] tx
+                                          ON a.Txid = tx.Txid 
+                                       INNER JOIN [Block] b
+                                          ON b.Hash = tx.BlockHash
+                                         AND b.Height < @Block
+                                       WHERE Address =  @Address
+                                       ORDER BY tx.Time";
 
 
             using (SqlConnection conn = new SqlConnection(connString))
@@ -216,6 +224,7 @@ namespace SAPI.API.Controllers
                 using (SqlCommand comm = new SqlCommand(selectString, conn))
                 {
                     comm.Parameters.AddWithValue("@Address", request.Address);
+                    comm.Parameters.AddWithValue("@Block", block);
 
                     try
                     {
@@ -235,7 +244,7 @@ namespace SAPI.API.Controllers
 
             }
 
-            decimal fee = 0.002m;
+            decimal fee = 0.001m;
             var newFee = (((unspent.Count * 148) + (2 * 34) + 10 + 9) / 1024m) * fee;
             if (newFee > fee)
                 fee = newFee;
@@ -247,14 +256,24 @@ namespace SAPI.API.Controllers
 
             List<AddressUnspent> data = new List<AddressUnspent>();
 
-            foreach (var item in unspent.OrderByDescending(t => t.Value))
+            var memPool = CoinService.GetRawMemPool(false);
+            var memInputs = new List<string>();
+
+            foreach (var item in memPool.TxIds)
+            {
+                memInputs.AddRange((CoinService.GetRawTransaction(item, 1).Vin).Select(t=> t.TxId));
+            }
+
+
+
+            foreach (var item in unspent.Where(u=> !memInputs.Contains(u.Txid)))
             {
                 data.Add(item);
                 if (data.Sum(d => d.Value) >= request.Amount)
                     break;
             }
 
-            fee = 0.002m;
+            fee = 0.001m;
             newFee = (((data.Count * 148) + (2 * 34) + 10 + 9) / 1024m) * fee;
             if (newFee > fee)
                 fee = newFee;

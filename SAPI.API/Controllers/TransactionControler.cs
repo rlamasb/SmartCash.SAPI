@@ -85,7 +85,7 @@ namespace SAPI.API.Controllers
         {
             string txid = string.Empty;
             string errMessage = string.Empty;
-             bool isInstantPay = true;
+            bool isInstantPay = true;
             try
             {
 
@@ -329,8 +329,11 @@ namespace SAPI.API.Controllers
                                     {
                                         Txid = response.Txid,
                                         Index = TransactionOutput.N,
-                                        Address = TransactionOutput.ScriptPubKey.Addresses.FirstOrDefault(),
-                                        Value = TransactionOutput.Value
+                                        Address = TransactionOutput.ScriptPubKey.Addresses != null ? TransactionOutput.ScriptPubKey.Addresses.FirstOrDefault() : string.Empty,
+                                        Value = TransactionOutput.Value,
+                                        Asm = TransactionOutput.ScriptPubKey.Asm,
+                                        Hex = TransactionOutput.ScriptPubKey.Hex
+
                                     }
                             );
                         }
