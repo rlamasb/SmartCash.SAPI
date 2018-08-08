@@ -31,6 +31,9 @@ namespace SAPI.API.Controllers
             {
                 decimal total = 0m;
                 decimal amount = 0m;
+                var sporks = CoinService.GetSporks();
+                var maxAmount = Convert.ToDecimal(sporks["SPORK_5_INSTANTSEND_MAX_VALUE"]);
+
 
                 string selectString = @"
                         SELECT Value 
@@ -56,10 +59,13 @@ namespace SAPI.API.Controllers
                             }
                         }
                         total += amount;
-                        if (total > 100000m)
+                        if (total > maxAmount)
                             return false;
                     }
                 }
+
+
+
 
                 foreach (var item in senderTxs)
                 {
