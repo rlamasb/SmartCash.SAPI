@@ -199,9 +199,8 @@ namespace SAPI.API.Controllers
         [HttpPost("unspent/AvailableInputs", Name = "GetAvailableInputs")]
         public IActionResult GetAvailableInputs([FromBody] AvailableInputsRequest request)
         {
-            List<AddressUnspent> unspent = new List<AddressUnspent>();
 
-            int block = Convert.ToInt32(CoinService.GetBlockCount()) - 1;
+            List<AddressUnspent> unspent = new List<AddressUnspent>();
 
             string selectString = @" SELECT a.Txid,
                                             a.[Index],
@@ -211,11 +210,8 @@ namespace SAPI.API.Controllers
                                         FROM [vAddressUnspent] a
                                        INNER JOIN [Transaction] tx
                                           ON a.Txid = tx.Txid 
-                                       INNER JOIN [Block] b
-                                          ON b.Hash = tx.BlockHash
-                                         AND b.Height < @Block
                                        WHERE Address =  @Address
-                                       ORDER BY tx.Time";
+                                       ORDER BY NEWID()";
 
 
             using (SqlConnection conn = new SqlConnection(connString))
@@ -224,7 +220,6 @@ namespace SAPI.API.Controllers
                 using (SqlCommand comm = new SqlCommand(selectString, conn))
                 {
                     comm.Parameters.AddWithValue("@Address", request.Address);
-                    comm.Parameters.AddWithValue("@Block", block);
 
                     try
                     {
@@ -244,6 +239,17 @@ namespace SAPI.API.Controllers
 
             }
 
+            var memPool = CoinService.GetRawMemPool(false);
+            var memInputs = new List<string>();
+
+            foreach (var item in memPool.TxIds)
+            {
+                memInputs.AddRange((CoinService.GetRawTransaction(item, 1).Vin).Select(t => t.TxId));
+            }
+
+            unspent = unspent.Where(u => !memInputs.Contains(u.Txid)).ToList();
+
+
             decimal fee = 0.001m;
             var newFee = (((unspent.Count * 148) + (2 * 34) + 10 + 9) / 1024m) * fee;
             if (newFee > fee)
@@ -251,22 +257,16 @@ namespace SAPI.API.Controllers
 
             fee = (decimal)RoundUp((double)fee, 3);
 
+
+            if (unspent.Count == 0 && memInputs.Count > 0)
+                return BadRequest(new Exception("Transactions being confirmed, please try again in one minute.").ToErrorObject());
+
             if (unspent.Sum(u => u.Value) < (request.Amount + fee))
                 return BadRequest(new Exception("Amount exceeds the balance of [" + unspent.Sum(u => u.Value).ToString() + "]").ToErrorObject());
 
             List<AddressUnspent> data = new List<AddressUnspent>();
 
-            var memPool = CoinService.GetRawMemPool(false);
-            var memInputs = new List<string>();
-
-            foreach (var item in memPool.TxIds)
-            {
-                memInputs.AddRange((CoinService.GetRawTransaction(item, 1).Vin).Select(t=> t.TxId));
-            }
-
-
-
-            foreach (var item in unspent.Where(u=> !memInputs.Contains(u.Txid)))
+            foreach (var item in unspent)
             {
                 data.Add(item);
                 if (data.Sum(d => d.Value) >= request.Amount)

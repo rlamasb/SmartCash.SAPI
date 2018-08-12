@@ -102,8 +102,27 @@ namespace SAPI.API.Controllers
                 var senderTxs = rawTx.Vin.Select(t => new TransactionList() { Txid = t.TxId, Index = Convert.ToInt32(t.Vout) }).ToList();
                 isInstantPay = CheckInstantPay(senderTxs);
 
-
-                txid = CoinService.SendRawTransaction(txHex.Data, false, isInstantPay);
+                try
+                {
+                    txid = CoinService.SendRawTransaction(txHex.Data, false, isInstantPay);    
+                }
+                catch (System.Exception ex)
+                {
+                    if(ex.Message.IndexOf("Not a valid InstantSend") > -1)
+                    {
+                        try
+                        {
+                            txid = CoinService.SendRawTransaction(txHex.Data, false, false);
+                        }
+                        catch (System.Exception newEx)
+                        {
+                            return BadRequest(new ErrorModel() { Error = "Transactions pending, please try again after 1 minute.", Description = newEx.Message});
+                        }
+                        
+                    }
+                    return BadRequest(new ErrorModel() { Error = "Transactions pending, please try again after 1 minute.", Description = ex.Message});
+                }
+                
 
                 var raw = Newtonsoft.Json.JsonConvert.SerializeObject(CoinService.DecodeRawTransaction(txHex.Data));
 
@@ -134,7 +153,7 @@ namespace SAPI.API.Controllers
             }
             catch (Exception ex)
             {
-                return BadRequest(new ErrorModel() { Error = "Transactions pending, please try again after 1 minute. ex: " + ex.Message });
+                return BadRequest(new ErrorModel() { Error = "Transactions pending, please try again after 1 minute.", Description = ex.Message });
             }
 
             return new ObjectResult(new
