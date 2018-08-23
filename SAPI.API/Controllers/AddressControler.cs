@@ -202,16 +202,7 @@ namespace SAPI.API.Controllers
 
             List<AddressUnspent> unspent = new List<AddressUnspent>();
 
-            string selectString = @" SELECT a.Txid,
-                                            a.[Index],
-                                            a.Address,
-                                            a.Value, 
-                                            '' as ScriptPubKey 
-                                        FROM [vAddressUnspent] a
-                                       INNER JOIN [Transaction] tx
-                                          ON a.Txid = tx.Txid 
-                                       WHERE Address =  @Address
-                                       ORDER BY NEWID()";
+            string selectString = @" EXEC Address_Available_Inputs  @Address";
 
 
             using (SqlConnection conn = new SqlConnection(connString))
@@ -238,6 +229,7 @@ namespace SAPI.API.Controllers
                 }
 
             }
+           
 
             var memPool = CoinService.GetRawMemPool(false);
             var memInputs = new List<string>();
@@ -299,9 +291,11 @@ namespace SAPI.API.Controllers
                 if (!string.IsNullOrEmpty(scriptPubKey))
                     break;
             }
+            uint blockHeight = CoinService.GetBlockCount();
 
             return new ObjectResult(new
             {
+                BlockHeight = blockHeight,
                 Fee = fee,
                 ScriptPubKey = scriptPubKey,
                 Inputs = data
