@@ -25,6 +25,7 @@ namespace SAPI.API.Controllers
         [HttpGet("balance/{address}", Name = "Balance")]
         public IActionResult GetBalance(string address)
         {
+
             List<AddressBalance> balance = new List<AddressBalance>();
 
             string selectString = @" SELECT TOP 1 Address,
@@ -200,6 +201,7 @@ namespace SAPI.API.Controllers
         public IActionResult GetAvailableInputs([FromBody] AvailableInputsRequest request)
         {
 
+            var watch = System.Diagnostics.Stopwatch.StartNew();
             List<AddressUnspent> unspent = new List<AddressUnspent>();
 
             string selectString = @" EXEC Address_Available_Inputs  @Address";
@@ -229,7 +231,7 @@ namespace SAPI.API.Controllers
                 }
 
             }
-           
+
 
             var memPool = CoinService.GetRawMemPool(false);
             var memInputs = new List<string>();
@@ -293,15 +295,21 @@ namespace SAPI.API.Controllers
             }
             uint blockHeight = CoinService.GetBlockCount();
 
+            watch.Stop();
+            var elapsedMs = watch.ElapsedMilliseconds;
+
+
             return new ObjectResult(new
             {
                 BlockHeight = blockHeight,
                 Fee = fee,
                 ScriptPubKey = scriptPubKey,
-                Inputs = data
+                Inputs = data,
+                Execution = elapsedMs
             });
 
         }
+
         public static double RoundUp(double input, int places)
         {
             double multiplier = Math.Pow(10, Convert.ToDouble(places));

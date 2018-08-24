@@ -13,6 +13,7 @@ using BitcoinLib.Responses.SharedComponents;
 using BitcoinLib.RPC.RequestResponse;
 using System.Net;
 using Newtonsoft.Json;
+using System.Threading.Tasks;
 
 namespace SAPI.API.Controllers
 {
@@ -30,10 +31,11 @@ namespace SAPI.API.Controllers
             try
             {
                 decimal total = 0m;
-                decimal amount = 0m;
                 var sporks = CoinService.GetSporks();
                 var maxAmount = Convert.ToDecimal(sporks["SPORK_5_INSTANTSEND_MAX_VALUE"]);
 
+                List<String> txs = senderTxs.Select(s => s.Txid + "-" + s.Index.ToString()).ToList();
+                string joined = string.Join("#", txs);
 
                 string selectString = @"
                         SELECT Value 
@@ -41,27 +43,27 @@ namespace SAPI.API.Controllers
                          WHERE Txid = @txid 
                            AND [Index] = @index";
 
+                selectString = "EXEC [Address_Check_InstantPayment] @txid, @index, @Ids";
+
                 using (SqlConnection conn = new SqlConnection(connString))
                 {
                     conn.Open();
-                    foreach (var item in senderTxs)
+                    using (SqlCommand comm = new SqlCommand(selectString, conn))
                     {
-                        using (SqlCommand comm = new SqlCommand(selectString, conn))
+                        comm.Parameters.AddWithValue("@txid", senderTxs.FirstOrDefault().Txid);
+                        comm.Parameters.AddWithValue("@index", senderTxs.FirstOrDefault().Index);
+                        comm.Parameters.AddWithValue("@Ids", joined);
+                        using (SqlDataReader dr = comm.ExecuteReader())
                         {
-                            comm.Parameters.AddWithValue("@txid", item.Txid);
-                            comm.Parameters.AddWithValue("@index", item.Index);
-                            using (SqlDataReader dr = comm.ExecuteReader())
+                            if (dr.Read())
                             {
-                                if (dr.Read())
-                                {
-                                    amount = Convert.ToDecimal(dr["Value"]);
-                                }
+                                total = Convert.ToDecimal(dr["Value"]);
                             }
                         }
-                        total += amount;
-                        if (total > maxAmount)
-                            return false;
                     }
+                    if (total > maxAmount)
+                        return false;
+
                 }
 
 
@@ -89,6 +91,7 @@ namespace SAPI.API.Controllers
         [HttpPost("send", Name = "SendTransaction")]
         public IActionResult SendTransaction([FromBody] GenericRequestModel<string> txHex)
         {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
             string txid = string.Empty;
             string errMessage = string.Empty;
             bool isInstantPay = true;
@@ -104,11 +107,11 @@ namespace SAPI.API.Controllers
 
                 try
                 {
-                    txid = CoinService.SendRawTransaction(txHex.Data, false, isInstantPay);    
+                    txid = CoinService.SendRawTransaction(txHex.Data, false, isInstantPay);
                 }
                 catch (System.Exception ex)
                 {
-                    if(ex.Message.IndexOf("Not a valid InstantSend") > -1)
+                    if (ex.Message.IndexOf("Not a valid InstantSend") > -1)
                     {
                         try
                         {
@@ -116,15 +119,39 @@ namespace SAPI.API.Controllers
                         }
                         catch (System.Exception newEx)
                         {
-                            return BadRequest(new ErrorModel() { Error = "Transactions pending, please try again after 1 minute.", Description = newEx.Message});
+                            return BadRequest(new ErrorModel() { Error = "Transactions pending, please try again after 1 minute.", Description = newEx.Message });
                         }
-                        
-                    }
-                    return BadRequest(new ErrorModel() { Error = "Transactions pending, please try again after 1 minute.", Description = ex.Message});
-                }
-                
 
-                var raw = Newtonsoft.Json.JsonConvert.SerializeObject(CoinService.DecodeRawTransaction(txHex.Data));
+                    }
+                    return BadRequest(new ErrorModel() { Error = "Transactions pending, please try again after 1 minute.", Description = ex.Message });
+                }
+
+                Task.Run(() => SaveDbTransaction(txid, txHex.Data));
+
+
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(new ErrorModel() { Error = "Transactions pending, please try again after 1 minute.", Description = ex.Message });
+            }
+            watch.Stop();
+            var elapsedMs = watch.ElapsedMilliseconds;
+
+            return new ObjectResult(new
+            {
+                tx = txid,
+                isInstantPay = isInstantPay,
+                Execution = elapsedMs
+            });
+
+
+        }
+
+        private void SaveDbTransaction(string txid, string rawData)
+        {
+            try
+            {
+                var raw = Newtonsoft.Json.JsonConvert.SerializeObject(CoinService.DecodeRawTransaction(rawData));
 
                 string cmdString = "INSERT INTO [TransactionBroadcast] ([TxId],[BroadcastTime],[RawTransaction]) VALUES (@TxId, @BroadcastTime, @RawTransaction)";
                 using (SqlConnection conn = new SqlConnection(connString))
@@ -149,19 +176,15 @@ namespace SAPI.API.Controllers
                         }
                     }
                 }
-
             }
-            catch (Exception ex)
+            catch
             {
-                return BadRequest(new ErrorModel() { Error = "Transactions pending, please try again after 1 minute.", Description = ex.Message });
             }
 
-            return new ObjectResult(new
-            {
-                tx = txid,
-                isInstantPay = isInstantPay
-            });
+
+
         }
+
 
         [HttpGet("BlockHeight", Name = "BlockHeight")]
         public IActionResult GetBlockHeight()
